@@ -33,15 +33,16 @@ export function EmptyState({
         textAlign: "center",
         padding: "48px 24px",
         wordBreak: "keep-all",
+        textWrap: "balance",
       }}
     >
       {icon}
       {icon ? <Spacing size={12} /> : null}
-      <Paragraph.Text typography="t4">{title}</Paragraph.Text>
+      <Paragraph.Text typography="t3">{title}</Paragraph.Text>
       {description ? (
         <>
           <Spacing size={4} />
-          <Paragraph.Text typography="t6">{description}</Paragraph.Text>
+          <Paragraph.Text typography="t6" color="var(--adaptiveGrey600)">{description}</Paragraph.Text>
         </>
       ) : null}
       {action ? (

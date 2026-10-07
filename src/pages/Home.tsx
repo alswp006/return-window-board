@@ -1,6 +1,6 @@
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
 import { useLinkClickHandler } from 'react-router-dom';
-import { Badge, Button, ListRow, Paragraph, Spacing, Tab, Top } from '@toss/tds-mobile';
+import { Asset, Badge, Button, ListRow, Paragraph, Spacing, Tab, Top } from '@toss/tds-mobile';
 import { generateHapticFeedback } from '@apps-in-toss/web-framework';
 import { ScreenScaffold } from '../components/ScreenScaffold';
 import { SummaryHero } from '../components/SummaryHero';
@@ -213,9 +213,10 @@ export default function Home() {
         top={top}
         bottom={<SubmitFooter label="첫 주문 등록하기" onClick={openSheet} />}
       >
-        <Spacing size={96} />
+        <Spacing size={48} />
         <EmptyState
           testId="home-empty"
+          icon={<Asset.ContentIcon name="icon-plus-small-mono" alt="" />}
           title="아직 등록한 주문이 없어요"
           description="받은 날만 넣으면 반품 마감일을 계산해 드려요"
         />
