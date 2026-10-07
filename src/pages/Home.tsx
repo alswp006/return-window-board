@@ -156,11 +156,6 @@ export default function Home() {
     setSheetOpen(true);
   };
 
-  const openFirst = () => {
-    haptic('success');
-    openSheet();
-  };
-
   const handleSaved = () => {
     setSheetOpen(false);
     changeTab('active');
@@ -214,16 +209,15 @@ export default function Home() {
 
   if (items.length === 0) {
     return (
-      <ScreenScaffold top={top}>
+      <ScreenScaffold
+        top={top}
+        bottom={<SubmitFooter label="첫 주문 등록하기" onClick={openSheet} />}
+      >
+        <Spacing size={96} />
         <EmptyState
           testId="home-empty"
           title="아직 등록한 주문이 없어요"
           description="받은 날만 넣으면 반품 마감일을 계산해 드려요"
-          action={
-            <Button aria-label="첫 주문 등록하기" variant="weak" onClick={openFirst}>
-              첫 주문 등록하기
-            </Button>
-          }
         />
         {sheet}
       </ScreenScaffold>

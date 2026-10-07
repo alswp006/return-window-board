@@ -32,6 +32,7 @@ export function EmptyState({
         alignItems: "center",
         textAlign: "center",
         padding: "48px 24px",
+        wordBreak: "keep-all",
       }}
     >
       {icon}
