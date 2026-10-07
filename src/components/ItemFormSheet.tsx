@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { FocusEvent } from 'react';
 import { BottomSheet, Chip, ChipItem, Paragraph, Spacing, TextField } from '@toss/tds-mobile';
+import { generateHapticFeedback } from '@apps-in-toss/web-framework';
 import type { DeadlineRule, ItemFormInput, ReturnItem } from '@/lib/types';
 import { MESSAGES, RULE_OPTIONS } from '@/lib/types';
 import { computeDeadline, ddayLabel, formatKoreanDate, todayYmd } from '@/lib/deadline';
-import { addItem, updateItem } from '@/lib/itemsStore';
+import { addItem, loadItems, recentStores as deriveRecentStores, StoreWriteError, updateItem } from '@/lib/itemsStore';
 import { validateForm } from '@/lib/validateForm';
 import type { FormField } from '@/lib/validateForm';
 import { logClick } from '@/lib/analytics';
@@ -31,6 +32,23 @@ function inputFromItem(item: ReturnItem): ItemFormInput {
   };
 }
 
+// SDK는 WebView 밖에서 throw한다 — 햅틱 실패가 저장·선택을 막으면 안 된다
+function haptic(type: 'tickWeak' | 'success') {
+  try {
+    Promise.resolve(generateHapticFeedback({ type })).catch(() => {});
+  } catch {
+    /* WebView 밖 — 무시 */
+  }
+}
+
+function storedRecentStores(): string[] {
+  try {
+    return deriveRecentStores(loadItems());
+  } catch {
+    return [];
+  }
+}
+
 function scrollToCenter(e: FocusEvent<HTMLInputElement>) {
   try {
     e.currentTarget.scrollIntoView?.({ block: 'center' });
@@ -43,18 +61,23 @@ export function ItemFormSheet({
   open,
   mode,
   initial,
-  recentStores,
+  recentStores: recentStoresProp,
   onClose,
   onSaved,
 }: {
   open: boolean;
   mode: 'create' | 'edit';
   initial?: ReturnItem;
-  recentStores: string[];
+  /** 생략하면 저장소의 최근 구매처 5개 */
+  recentStores?: string[];
   onClose: () => void;
   onSaved: (item: ReturnItem) => void;
 }) {
   const today = todayYmd();
+  const recentStores = useMemo(
+    () => recentStoresProp ?? (open ? storedRecentStores() : []),
+    [recentStoresProp, open],
+  );
   const [input, setInput] = useState<ItemFormInput>(() =>
     initial ? inputFromItem(initial) : emptyInput(today),
   );
@@ -101,18 +124,23 @@ export function ItemFormSheet({
   const handleSave = () => {
     if (!validation.valid) return;
     logClick(mode === 'create' ? 'item_create_save' : 'item_edit_save');
+    haptic('success');
+    let saved: ReturnItem;
     try {
-      const saved = mode === 'edit' && initial ? updateItem(initial.id, input) : addItem(input);
-      setSaveFailed(false);
-      if (mode === 'create') {
-        setInput(emptyInput(today));
-        setTouched({});
-      }
-      onSaved(saved);
-    } catch {
-      // StoreWriteError 등 — 시트와 입력값을 그대로 두고, 버튼은 다시 누를 수 있게 둔다
+      saved = mode === 'edit' && initial ? updateItem(initial.id, input) : addItem(input);
+    } catch (err) {
+      // 시트와 입력값을 그대로 두고, 버튼은 다시 누를 수 있게 둔다. 그 밖의 예외는 숨기지 않는다.
+      if (!(err instanceof StoreWriteError)) throw err;
       setSaveFailed(true);
+      return;
     }
+    setSaveFailed(false);
+    if (mode === 'create') {
+      setInput(emptyInput(today));
+      setTouched({});
+    }
+    onSaved(saved);
+    onClose();
   };
 
   const hint = saveFailed ? MESSAGES.WRITE_FAIL_HINT : validation.valid ? undefined : validation.firstHint;
@@ -120,6 +148,7 @@ export function ItemFormSheet({
   const selectedRuleLabel = RULE_OPTIONS.find((o) => o.value === input.rule)?.label;
 
   const pickRule = (rule: DeadlineRule) => {
+    haptic('tickWeak');
     set('rule', rule);
     touch('rule');
   };
@@ -187,7 +216,10 @@ export function ItemFormSheet({
                 key={name}
                 aria-label={`구매처 ${name}`}
                 selected={false}
-                onClick={() => set('store', name)}
+                onClick={() => {
+                  haptic('tickWeak');
+                  set('store', name);
+                }}
               >
                 {name}
               </ChipItem>
@@ -233,9 +265,9 @@ export function ItemFormSheet({
           <Spacing size={12} />
           <TextField
             variant="box"
-            label="구매처 정책 일수"
+            label="구매처 반품 기한(일)"
             labelOption="sustain"
-            aria-label="구매처 정책 일수"
+            aria-label="구매처 반품 기한"
             placeholder="예: 30"
             inputMode="numeric"
             enterKeyHint="next"

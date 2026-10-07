@@ -275,6 +275,7 @@ CRITICAL: Before creating any new function, type, or component, check the list a
 - 0001: Types & Constants (files: src/lib/types.ts)
 - 0002: Core Logic — 마감일 계산·정렬·날짜 포맷 (files: src/lib/deadline.ts)
 - 0008: Routing & Integration — App 라우트 연결과 검수 점검 (files: src/App.tsx)
+- 0003: Storage — itemsStore + 체크리스트 프리셋 (files: src/lib/itemsStore.ts, src/lib/checklistPresets.ts)
 
 ## Available exports from existing files
 // src/App.tsx
@@ -306,9 +307,6 @@ export function CountUp({
 // src/components/FloatingTabBar.tsx
 export type TabItem = {
 export function FloatingTabBar({ items }: { items: TabItem[] }) {
-
-// src/components/ItemFormSheet.tsx
-export function ItemFormSheet({
 
 // src/components/MiniBar.tsx
 export function MiniBar({
@@ -345,8 +343,12 @@ export function logClick(name: string, extra?: LogFields): void {
 export function logImpression(name: string, extra?: LogFields): void {
 export function useScreenLog(page: string): void {
 
+// src/lib/checklistPresets.ts
+export function newId(prefix = 'id'): string {
+export function seedChecklist(rule: DeadlineRule): ChecklistItem[] {
+
 // src/lib/contract.ts
-export type DeadlineRule = { type: 'purchased' | 'received'; days: number } | { type: 'monthclamped'; mon
+export type DeadlineRule =
 
 ## Memory Index (자동 학습 — 힌트로만 사용, 실제 코드 확인 필수)
 

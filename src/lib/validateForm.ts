@@ -13,7 +13,8 @@ export const FORM_FIELD_ORDER: FormField[] = [
 
 export interface FormValidation {
   valid: boolean;
-  firstHint: string;
+  /** 첫 문제 항목의 문구 하나. 모두 유효하면 없다. */
+  firstHint?: string;
   fieldErrors: Partial<Record<FormField, string>>;
 }
 
@@ -27,15 +28,15 @@ export function validateForm(input: ItemFormInput, today: string): FormValidatio
 
   if (input.store.trim() === '') errors.store = '구매처를 입력해 주세요';
 
-  if (!YMD.test(input.receivedDate)) errors.receivedDate = '수령일을 입력해 주세요';
+  if (!YMD.test(input.receivedDate)) errors.receivedDate = '수령일을 선택해 주세요';
   else if (input.receivedDate > today) errors.receivedDate = '수령일은 오늘 이후일 수 없어요';
 
-  if (input.rule === null) errors.rule = '기한 유형을 골라 주세요';
+  if (input.rule === null) errors.rule = '기한 유형을 선택해 주세요';
 
   if (input.rule === 'store_policy_days') {
     const raw = input.storePolicyDays.trim();
     const n = Number(raw);
-    if (raw === '') errors.storePolicyDays = '구매처 정책 일수를 입력해 주세요';
+    if (raw === '') errors.storePolicyDays = '구매처 반품 기한을 입력해 주세요';
     else if (!/^\d+$/.test(raw) || !Number.isInteger(n) || n < 1 || n > 365) {
       errors.storePolicyDays = '1~365일 사이 숫자로 입력해 주세요';
     }
@@ -47,5 +48,5 @@ export function validateForm(input: ItemFormInput, today: string): FormValidatio
   }
 
   const first = FORM_FIELD_ORDER.find((f) => errors[f]);
-  return { valid: !first, firstHint: first ? errors[first]! : '', fieldErrors: errors };
+  return { valid: !first, firstHint: first ? errors[first] : undefined, fieldErrors: errors };
 }
