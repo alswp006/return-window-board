@@ -60,7 +60,7 @@ describe('Core Logic — 마감일 계산·정렬·날짜 포맷', () => {
       );
 
       expect(result.deadline).toBe('2027-01-01');
-      expect(result.dDay).toBe(84);
+      expect(result.dDay).toBe(92);
     });
 
     it('should clamp to last day of month for 3-month deadline', () => {
@@ -275,11 +275,11 @@ describe('Core Logic — 마감일 계산·정렬·날짜 포맷', () => {
 
       const result = sortActive(items, '2026-10-08');
 
-      // Expected dDays: Product B (dDay 0), Product C (dDay 2), Product A (dDay 5)
+      // 7일 규칙: A(10-03 수령) dDay 2, B(10-01) dDay 0, C(10-06) dDay 5
       expect(result.length).toBe(3);
       expect(result[0].id).toBe('2');
-      expect(result[1].id).toBe('3');
-      expect(result[2].id).toBe('1');
+      expect(result[1].id).toBe('1');
+      expect(result[2].id).toBe('3');
     });
 
     it('should exclude expired items', () => {
