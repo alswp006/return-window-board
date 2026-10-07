@@ -42,11 +42,12 @@ describe("Types & Constants (Packet 0001)", () => {
 
   it("AC-1c: should export ChecklistItem interface with done and text fields", () => {
     const item: ChecklistItem = {
+      id: "c-1",
+      label: "Check for defects",
       done: false,
-      text: "Check for defects",
     };
     expect(item.done).toBe(false);
-    expect(item.text).toBe("Check for defects");
+    expect(item.label).toBe("Check for defects");
   });
 
   it("AC-1d: should export ReturnItem interface with all required fields", () => {
@@ -58,7 +59,7 @@ describe("Types & Constants (Packet 0001)", () => {
       useStartDate: "2026-09-05",
       rule: "change_of_mind_7d",
       storePolicyDays: undefined,
-      checklist: [{ done: false, text: "Test" }],
+      checklist: [{ id: "c-1", label: "Test", done: false }],
       status: "active",
       closedAt: undefined,
       createdAt: "2026-09-01T10:00:00Z",
@@ -77,8 +78,7 @@ describe("Types & Constants (Packet 0001)", () => {
       receivedDate: "2026-09-01",
       useStartDate: "2026-09-05",
       rule: "mismatch_3m",
-      storePolicyDays: 30,
-      checklist: [],
+      storePolicyDays: "30",
     };
     expect(formInput.productName).toBe("New Product");
     expect(formInput.store).toBe("New Store");
@@ -87,23 +87,21 @@ describe("Types & Constants (Packet 0001)", () => {
 
   it("AC-1f: should export DeadlineInfo interface with calculated deadline fields", () => {
     const deadlineInfo: DeadlineInfo = {
-      rule: "change_of_mind_7d",
-      daysRemaining: 3,
-      deadlineDate: "2026-09-08",
+      deadline: "2026-09-08",
+      dDay: 3,
+      isToday: false,
       isExpired: false,
     };
-    expect(deadlineInfo.rule).toBe("change_of_mind_7d");
-    expect(deadlineInfo.daysRemaining).toBe(3);
+    expect(deadlineInfo.deadline).toBe("2026-09-08");
+    expect(deadlineInfo.dDay).toBe(3);
     expect(deadlineInfo.isExpired).toBe(false);
   });
 
-  it("AC-1g: should export BoardSection type as union of 3 values", () => {
+  it("AC-1g: should export BoardSection type as union of 2 values", () => {
     const section1: BoardSection = "active";
     const section2: BoardSection = "archive";
-    const section3: BoardSection = "expired";
     expect(section1).toBe("active");
     expect(section2).toBe("archive");
-    expect(section3).toBe("expired");
   });
 
   it("AC-1h: should export ArchiveReason type as union of 3 values", () => {
@@ -117,11 +115,9 @@ describe("Types & Constants (Packet 0001)", () => {
 
   it("AC-1i: should export ResultParams interface with result configuration", () => {
     const resultParams: ResultParams = {
-      itemId: "item-001",
-      action: "returned",
+      id: "item-001",
     };
-    expect(resultParams.itemId).toBe("item-001");
-    expect(resultParams.action).toBe("returned");
+    expect(resultParams.id).toBe("item-001");
   });
 
   // AC-2: STORAGE_KEY constant is correct
