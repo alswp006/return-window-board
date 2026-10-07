@@ -193,12 +193,15 @@ export const MESSAGES = {
 ### File Tree (src/)
   App.tsx
   components/
+    AdBoundary.tsx
     AdSlot.tsx
     Amount.tsx
     BottomCTA.tsx
     Card.tsx
+    ChecklistSection.tsx
     CountUp.tsx
     FloatingTabBar.tsx
+    ItemFormSheet.tsx
     MiniBar.tsx
     PageShell.tsx
     ScreenScaffold.tsx
@@ -210,13 +213,16 @@ export const MESSAGES = {
   hooks/
   lib/
     analytics.ts
+    checklistPresets.ts
     contract.ts
     deadline.ts
+    itemsStore.ts
     review.ts
     share.ts
     storage.ts
     types.ts
     utils.ts
+    validateForm.ts
   main.tsx
   pages/
     Home.tsx
@@ -230,21 +236,27 @@ export const MESSAGES = {
 
 ### Exports (src/lib/)
 - analytics.ts: export type LogFields = Record<string, string | number | boolean | null>; export const DWELL_MS = 3000; export function fireAndForget(call: () => unknown): void; export function logScreen(page: string, extra?: LogFields): void; export function logClick(name: string, extra?: LogFields): void; export function logImpression(name: string, extra?: LogFields): void; export function useScreenLog(page: string): void
+- checklistPresets.ts: export function newId(prefix = 'id'): string; export function seedChecklist(rule: DeadlineRule): ChecklistItem[]
 - contract.ts: export type DeadlineRule =; export type ItemStatus = 'active' | 'archived'; export type ChecklistItem =; export type ReturnItem =; export type ItemFormInput =; export type DeadlineInfo =; export type BoardSection = 'active' | 'archived'; export type ArchiveReason = 'expired' | 'returned' | 'cancelled'
 - deadline.ts: export function addDays(ymd: string, n: number): string; export function addMonthsClamped(ymd: string, n: number): string; export function diffDays(a: string, b: string): number; export function todayYmd(): string; export function computeDeadline( src: Pick<ReturnItem, 'receivedDate' | 'useStartDate' | 'rule' | 'storePolicyDays'>, to; export function ddayLabel(d: number): string; export function sortActive(items: ReturnItem[], today: string): ReturnItem[]; export function sortArchive(items: ReturnItem[], today: string): ReturnItem[]
+- itemsStore.ts: export class StoreReadError extends Error; export class StoreWriteError extends Error; export class ItemNotFoundError extends Error; export function loadItems(): ReturnItem[]; export function reloadItems(): ReturnItem[]; export function findItem(id: string): ReturnItem | undefined; export function addItem(input: ItemFormInput): ReturnItem; export function updateItem(id: string, input: ItemFormInput): ReturnItem
 - review.ts: export function requestReviewOnce(key: string = REVIEW_REQUESTED_KEY): void
 - share.ts: export interface ShareAppOptions; export async function shareApp(opts: ShareAppOptions): Promise<void>
 - storage.ts: export function getItem<T>(key: string): T | null; export function setItem<T>(key: string, value: T): void; export function removeItem(key: string): void
 - types.ts: export type DeadlineRule = 'change_of_mind_7d' | 'mismatch_3m' | 'store_policy_days'; export type ItemStatus = 'active' | 'returned' | 'kept'; export interface ChecklistItem; export interface ReturnItem; export interface ItemFormInput; export interface DeadlineInfo; export type BoardSection = 'active' | 'archive'; export type ArchiveReason = 'returned' | 'kept' | 'expired'
 - utils.ts: export function cn(...classes: (string | boolean | undefined | null)[]): string; export function formatNumber(n: number): string; export function formatCurrency(n: number, currency = 'KRW'): string
+- validateForm.ts: export type FormField = 'productName' | 'store' | 'receivedDate' | 'rule' | 'storePolicyDays' | 'useStartDate'; export const FORM_FIELD_ORDER: FormField[] = [ 'productName', 'store', 'receivedDate', 'rule', 'storePolicyDays', 'useSt; export interface FormValidation; export function validateForm(input: ItemFormInput, today: string): FormValidation
 
 ### Components (src/components/)
+- AdBoundary.tsx: adGroupId
 - AdSlot.tsx: AdSlot
 - Amount.tsx: Amount
 - BottomCTA.tsx: SubmitFooter, ButtonStack
 - Card.tsx: Card
+- ChecklistSection.tsx: ChecklistSection
 - CountUp.tsx: CountUp
 - FloatingTabBar.tsx: FloatingTabBar
+- ItemFormSheet.tsx: ItemFormSheet
 - MiniBar.tsx: MiniBar
 - PageShell.tsx: PageShell
 - ScreenScaffold.tsx: ScreenScaffold
@@ -253,16 +265,25 @@ export const MESSAGES = {
 - SummaryHero.tsx: SummaryHero
 - TossPurchase.tsx: TossPurchase
 - TossRewardAd.tsx: TossRewardAd
+
+### Module Dependencies (import graph)
+  pages/Home.tsx → imports: lib/types, lib/types, lib/deadline, lib/utils, lib/itemsStore, lib/analytics
+  pages/Result.tsx → imports: lib/types, lib/types, lib/deadline, lib/utils, lib/itemsStore, lib/analytics, lib/review, lib/share
 CRITICAL: Before creating any new function, type, or component, check the list above. If something similar exists, import and use it.
 
 ## Already Implemented (do NOT duplicate or overwrite)
 - 0001: Types & Constants (files: src/lib/types.ts)
 - 0002: Core Logic — 마감일 계산·정렬·날짜 포맷 (files: src/lib/deadline.ts)
-
-## TDD 상태
-⚠️ TDD 테스트 파일 자동 작성에 실패했습니다. 소스 코드를 작성하기 전에 `src/__tests__/packet-XXXX.test.ts` 파일에 AC 기반 테스트를 먼저 작성하세요 (TDD red phase). 테스트 작성 후 구현하세요.
+- 0008: Routing & Integration — App 라우트 연결과 검수 점검 (files: src/App.tsx)
 
 ## Available exports from existing files
+// src/App.tsx
+export default function App() {
+
+// src/components/AdBoundary.tsx
+export class AdBoundary extends Component<{ children: ReactNode }, { failed: boolean }> {
+export function adGroupId(): string {
+
 // src/components/AdSlot.tsx
 export function AdSlot({ adGroupId, className, variant, theme }: AdSlotProps) {
 
@@ -276,12 +297,18 @@ export function ButtonStack({
 // src/components/Card.tsx
 export function Card({
 
+// src/components/ChecklistSection.tsx
+export function ChecklistSection({
+
 // src/components/CountUp.tsx
 export function CountUp({
 
 // src/components/FloatingTabBar.tsx
 export type TabItem = {
 export function FloatingTabBar({ items }: { items: TabItem[] }) {
+
+// src/components/ItemFormSheet.tsx
+export function ItemFormSheet({
 
 // src/components/MiniBar.tsx
 export function MiniBar({
@@ -319,11 +346,7 @@ export function logImpression(name: string, extra?: LogFields): void {
 export function useScreenLog(page: string): void {
 
 // src/lib/contract.ts
-export type DeadlineRule = { type: 'purchased' | 'received'; days: number } | { type: 'monthclamped'; months: number };
-export type ItemStatus = 'active' | 'archived';
-export type ChecklistItem = { id: string; text: string; completed: boolean };
-export type ReturnItem = { id: string; productName: string; store: string; createdAt: string; receivedDate: string; rule: DeadlineRule; checklist: ChecklistItem[]; status: ItemStatus };
-export type ItemFormInput =
+export type DeadlineRule = { type: 'purchased' | 'received'; days: number } | { type: 'monthclamped'; mon
 
 ## Memory Index (자동 학습 — 힌트로만 사용, 실제 코드 확인 필수)
 

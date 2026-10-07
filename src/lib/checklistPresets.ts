@@ -14,6 +14,13 @@ let seq = 0;
 
 /** 로컬 고유 id — crypto.randomUUID가 없는 구버전 WebView(Android 7)도 지원 */
 export function newId(prefix = 'id'): string {
+  try {
+    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+      return `${prefix}-${crypto.randomUUID()}`;
+    }
+  } catch {
+    // 보안 컨텍스트가 아니면 randomUUID가 없거나 던진다 — 아래 대체 경로로
+  }
   seq += 1;
   return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}-${seq}`;
 }

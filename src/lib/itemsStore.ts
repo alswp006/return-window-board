@@ -62,9 +62,11 @@ export function reloadItems(): ReturnItem[] {
   return loadItems();
 }
 
-export function findItem(id: string): ReturnItem | undefined {
+export function getItem(id: string): ReturnItem | undefined {
   return loadItems().find((it) => it.id === id);
 }
+
+export const findItem = getItem;
 
 /** 새 배열을 다 만든 뒤 한 번만 쓴다. 실패하면 캐시·저장소 모두 실패 전 그대로다. */
 function commit(next: ReturnItem[]): void {
