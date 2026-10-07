@@ -1,0 +1,390 @@
+[
+  {
+    "id": "0001",
+    "title": "Types & Constants",
+    "epic": "Epic 1: Data Layer",
+    "task": {
+      "description": "SPEC Data Model을 src/lib/types.ts에 그대로 export한다. 대상은 DeadlineRule, ItemStatus, ChecklistItem, ReturnItem, ItemFormInput, DeadlineInfo, BoardSection, ArchiveReason, ResultParams다. 저장 키 STORAGE_KEY='rwb:items:v1'과 화면 문구 상수도 함께 export한다. 문구 상수는 기한 유형 라벨, 출처 줄, 유형별 안내, 비용 안내, 보관함 라벨, 저장 실패 문구다. 페이지는 이 상수만 써서 SPEC 문구와 글자 단위로 일치시킨다. 구매처·체크리스트는 닫힌 유니온으로 만들지 않는다.",
+      "acceptance_criteria": [
+        "src/lib/types.ts가 SPEC Data Model의 9개 타입을 이름과 필드 그대로 export하고, `tsc --noEmit` 오류가 0건이다. DeadlineRule과 ItemStatus 외의 문자열 유니온은 BoardSection과 ArchiveReason뿐이다.",
+        "STORAGE_KEY === 'rwb:items:v1'이다.",
+        "RULE_OPTIONS는 [{value:'change_of_mind_7d',label:'단순 변심 7일'},{value:'mismatch_3m',label:'하자·광고와 다름 3개월'},{value:'store_policy_days',label:'구매처 정책'}] 순서로 export된다.",
+        "ruleSourceLine(rule, days?) 반환값은 다음과 같다.\n- 7d: '수령일부터 7일 · 전자상거래법 제17조 ①'\n- 3m: '공급받은 날부터 3개월 · 전자상거래법 제17조 ③'\n- policy(30): '구매처 정책 30일 · 구매처 안내 기준'",
+        "RULE_NOTICE 값은 다음과 같다.\n- change_of_mind_7d: '써 보거나 일부를 소비해 가치가 크게 줄면 철회가 제한될 수 있어요. 내용 확인을 위한 포장 개봉은 예외예요 (제17조 ②)'\n- mismatch_3m: '하자를 안 날(알 수 있었던 날)부터 30일 이내라는 조건도 함께 있어요 (제17조 ③)'\n- store_policy_days: null",
+        "COST_LINE 값은 다음과 같다.\n- 7d: '반품 배송비는 보통 내가 부담해요 (전자상거래법 제18조)'\n- 3m: '반품 비용은 판매자가 부담해요 (전자상거래법 제18조)'\n- policy: '배송비 부담은 구매처 안내를 확인하세요'",
+        "ARCHIVE_LABEL은 {returned:'반품 신청함', kept:'계속 쓰기로 함', expired:'기한 지남'}이다.",
+        "MESSAGES 값은 다음과 같다.\n- WRITE_FAIL_HINT: '저장하지 못했어요. 보관함의 지난 건을 삭제한 뒤 다시 시도해 주세요'\n- SAVE_FAIL_TOAST: '저장하지 못했어요. 다시 시도해 주세요'\n- DELETE_FAIL_TOAST: '삭제하지 못했어요. 다시 시도해 주세요'\n- LOAD_ERROR: '저장된 목록을 불러오지 못했어요'\n- NOT_FOUND: '찾을 수 없는 건이에요'"
+      ]
+    },
+    "covers": [
+      "F1-AC-1"
+    ],
+    "files": [
+      "src/lib/types.ts"
+    ],
+    "definition_of_done": [
+      "SPEC Data Model 코드 블록의 타입이 필드명·옵셔널 여부까지 동일하다.",
+      "store, label, productName은 string 타입이다. 구매처나 체크리스트 항목용 유니온 타입이 0개다.",
+      "types.ts에 HEX 색상, React import, 런타임 부수효과가 0건이다.",
+      "`tsc --noEmit`이 통과한다."
+    ],
+    "depends_on": [],
+    "db_schema": "localStorage key 'rwb:items:v1' 값은 JSON.stringify(ReturnItem[])다. ReturnItem의 필드는 다음과 같다: id, productName, store, receivedDate('YYYY-MM-DD'), useStartDate?, rule, storePolicyDays?, checklist: ChecklistItem[], status('active'|'returned'|'kept'), closedAt?, createdAt(ISO). expired는 저장하지 않고 날짜로 파생한다.",
+    "api_contract": "export type DeadlineRule; export type ItemStatus; export interface ChecklistItem; export interface ReturnItem; export interface ItemFormInput; export interface DeadlineInfo; export type BoardSection; export type ArchiveReason; export interface ResultParams; export const STORAGE_KEY; export const RULE_OPTIONS: {value: DeadlineRule; label: string}[]; export function ruleSourceLine(rule: DeadlineRule, days?: number): string; export const RULE_NOTICE: Record<DeadlineRule, string | null>; export const COST_LINE: Record<DeadlineRule, string>; export const ARCHIVE_LABEL: Record<ArchiveReason, string>; export const MESSAGES",
+    "dependencies": [],
+    "ui_requirements": "UI 없는 데이터 계층 패킷이다. 여기서 export한 문구 상수는 Home·Result·ItemFormSheet 블루프린트의 문구 출처다. 문구 출처는 다음과 같다.\n- ruleSourceLine, RULE_NOTICE, COST_LINE: F3 AC 문구를 상수로 옮겨 글자 단위로 일치시킨다.\n- ARCHIVE_LABEL: 블루프린트 archiveLabel 표를 따른다. returned는 '반품 신청함'(blue), kept는 '계속 쓰기로 함'(teal), expired는 '기한 지남'(elephant)이다. color 매핑은 Home 패킷에서 둔다."
+  },
+  {
+    "id": "0002",
+    "title": "Core Logic — 마감일 계산·정렬·날짜 포맷",
+    "epic": "Epic 1: Data Layer",
+    "task": {
+      "description": "src/lib/deadline.ts에 순수 함수를 만든다. 'YYYY-MM-DD'를 연·월·일 정수로 파싱하고, 일수 연산은 Date.UTC 기반 epoch-day 정수로만 한다. 로컬↔UTC 변환으로 날짜가 하루 밀리면 안 된다. 제공 함수는 addDays, addMonthsClamped, computeDeadline, ddayLabel, sortActive, sortArchive, archiveReason, summarizeActive, formatKoreanDate, todayYmd다. 모든 함수는 today를 인자로 받는다. 템플릿에 formatNumber가 없으면 여기서 Intl.NumberFormat('ko-KR')로 export한다.",
+      "acceptance_criteria": [
+        "computeDeadline({receivedDate, rule, storePolicyDays}, today).deadline이 다음 표와 일치한다.\n- 2026-10-01 + 7d → 2026-10-08\n- 2026-10-01 + 3m → 2027-01-01\n- 2026-11-30 + 3m → 2027-02-28\n- 2027-11-30 + 3m → 2028-02-29\n- 2026-10-01 + policy 30 → 2026-10-31",
+        "receivedDate 2026-10-01, useStartDate 2026-10-04, 7d 규칙이면 useStartBasedDeadline === '2026-10-11'이고 daysEarlier === 3이다. useStartDate가 없거나 receivedDate와 같으면 두 필드 모두 undefined다.",
+        "today가 '2026-10-08'일 때 다음이 성립한다.\n- 마감 2026-10-08: dDay 0, isToday true, isExpired false\n- 마감 2026-10-07: dDay -1, isExpired true",
+        "formatKoreanDate 결과가 다음과 같다.\n- ('2026-10-15', '2026-10-08') → '10월 15일 (목)'\n- ('2026-10-11', '2026-10-08') → '10월 11일 (일)'\n- ('2027-01-01', '2026-10-08') → '2027년 1월 1일 (금)'",
+        "ddayLabel 결과가 다음과 같다.\n- ddayLabel(0) → 'D-DAY'\n- ddayLabel(5) → 'D-5'\n- ddayLabel(-2) → 'D+2'\n숫자 부분은 formatNumber를 거친다.",
+        "sortActive는 status 'active'이고 만료되지 않은 건만 반환한다.\n- 정렬: dDay 오름차순, 같으면 createdAt 오름차순\n- 예: dDay 5·0·2인 3건 → 0, 2, 5 순서",
+        "sortArchive는 status !== 'active'이거나 만료된 건을 마감일 내림차순으로 반환한다.",
+        "archiveReason 결과가 다음과 같다.\n- returned → 'returned'\n- kept → 'kept'\n- active이면서 만료 → 'expired'\n- active이면서 미만료 → null",
+        "summarizeActive(items, today)는 {todayCount, within3Count, nearest}를 반환한다. within3Count는 dDay 1~3인 건수다. dDay 5·0·2 예시에서 {todayCount: 1, within3Count: 1}이다."
+      ]
+    },
+    "covers": [
+      "F1-AC-2",
+      "F1-AC-3",
+      "F1-AC-4",
+      "F2-AC-3",
+      "F2-AC-6",
+      "F3-AC-2",
+      "AC-FORMAT"
+    ],
+    "files": [
+      "src/lib/deadline.ts"
+    ],
+    "definition_of_done": [
+      "모든 함수가 순수 함수다. 단 todayYmd()는 로컬 getFullYear/getMonth/getDate로만 오늘을 만든다.",
+      "날짜 계산에 toISOString()이나 new Date('YYYY-MM-DD') 파싱을 쓰지 않는다. grep 결과 0건이다.",
+      "요일은 epoch-day 기반으로 ['일','월','화','수','목','금','토']에서 고른다.",
+      "types.ts만 import하고 React import는 0건이다.",
+      "`tsc --noEmit`이 통과한다."
+    ],
+    "depends_on": [
+      "0001"
+    ],
+    "db_schema": "",
+    "api_contract": "addDays(ymd: string, n: number): string; addMonthsClamped(ymd: string, n: number): string; diffDays(a: string, b: string): number; todayYmd(): string; computeDeadline(src: Pick<ReturnItem,'receivedDate'|'useStartDate'|'rule'|'storePolicyDays'>, today: string): DeadlineInfo; ddayLabel(d: number): string; sortActive(items: ReturnItem[], today: string): ReturnItem[]; sortArchive(items: ReturnItem[], today: string): ReturnItem[]; archiveReason(item: ReturnItem, today: string): ArchiveReason | null; summarizeActive(items: ReturnItem[], today: string): {todayCount: number; within3Count: number; nearest?: {item: ReturnItem; dDay: number}}; formatKoreanDate(ymd: string, today?: string): string; formatNumber(n: number): string (템플릿에 없을 때만)",
+    "dependencies": [],
+    "ui_requirements": "UI 없는 로직 패킷이다. 블루프린트의 표기 규칙을 여기서 구현한다.\n- 날짜: formatKoreanDate로 '10월 15일 (목)'. 올해가 아니면 '2027년 1월 1일 (금)'.\n- 숫자: formatNumber.\n- D-day: 0이면 'D-DAY', 그 밖에는 `D-${formatNumber(n)}`.\n- 정렬: 진행 중은 sortActive(D-day 오름차순, 같으면 createdAt 오름차순), 보관함은 sortArchive(마감일 내림차순)."
+  },
+  {
+    "id": "0003",
+    "title": "Storage — itemsStore + 체크리스트 프리셋",
+    "epic": "Epic 1: Data Layer",
+    "task": {
+      "description": "src/lib/itemsStore.ts는 'rwb:items:v1'에 반품 건을 읽고 쓰는 모듈이다.\n- 읽기: loadItems가 메모리 캐시를 쓴다. JSON이 깨졌으면 StoreReadError를 던지고 저장소를 덮어쓰지 않는다.\n- 쓰기: 7개 함수 모두 새 배열을 만든 뒤 setItem을 한 번만 호출한다. 실패하면 StoreWriteError를 던지고 캐시와 저장소를 실패 전 그대로 둔다.\n- recentStores로 최근 구매처를 뽑는다.\n- checklistPresets.ts에 유형별 시드 함수를 둔다.",
+      "acceptance_criteria": [
+        "addItem(input) 동작은 다음과 같다.\n- productName과 store를 trim하고 id·createdAt·status 'active'·체크리스트 시드를 붙인다.\n- localStorage['rwb:items:v1']에 저장한다.\n- 이어서 loadItems()를 호출하면 같은 건이 같은 필드로 반환된다.",
+        "시드는 5개 항목이다.\n- 주문번호·결제 내역 캡처해 두기\n- 받은 상태 사진 찍기 (상자·상품·구성품)\n- 구성품·사은품·포장재 모두 챙기기\n- 택·라벨 떼지 않기\n- 구매처 반품 메뉴에서 신청 접수하기\nrule이 mismatch_3m이면 '하자 부위 사진·영상 남기기'가 하나 더 붙어 6개다. 모든 항목은 done false로 시작한다.",
+        "updateItem(id, input)은 입력 필드만 바꾸고 checklist·status·createdAt은 유지한다.",
+        "deleteItem(id) 뒤 loadItems()에 그 id가 없다.",
+        "setStatus(id, 'returned'|'kept')는 status와 closedAt(ISO)를 저장한다. setStatus(id, 'active')는 closedAt을 제거한다.",
+        "체크리스트 함수 동작은 다음과 같다.\n- toggleCheck(id, checkId): done을 반전한다.\n- addCheck(id, label): trim한 1~30자 label을 done false로 끝에 추가한다. 범위 밖이면 Error를 던진다.\n- removeCheck(id, checkId): 해당 항목을 지운다.\n세 함수 모두 갱신된 ReturnItem을 반환한다.",
+        "localStorage 값이 '{broken'이면 loadItems()가 StoreReadError를 던지고, 저장소 원문은 '{broken' 그대로다. 키가 없으면 []를 반환한다.",
+        "Storage.prototype.setItem이 QuotaExceededError DOMException을 던지도록 mock하면 7개 쓰기 함수가 각각 StoreWriteError를 던진다. 호출 전후로 loadItems() 결과와 localStorage 원문이 같다.",
+        "recentStores(items)는 store를 trim하고 같은 이름을 하나로 합친다. createdAt 최신순으로 최대 5개를 반환하고, 빈 배열이면 []를 반환한다."
+      ]
+    },
+    "covers": [
+      "F1-AC-1",
+      "F1-AC-5",
+      "F1-AC-7",
+      "F2-AC-4",
+      "F3-AC-4",
+      "AC-ERROR",
+      "AC-STORAGE-WRITE-1",
+      "AC-STORAGE-WRITE-2",
+      "AC-STORAGE-WRITE-3"
+    ],
+    "files": [
+      "src/lib/itemsStore.ts",
+      "src/lib/checklistPresets.ts"
+    ],
+    "definition_of_done": [
+      "템플릿 storage 헬퍼를 쓴다. 단 헬퍼가 setItem 예외를 삼키는 구조라면 쓰기 경로만 window.localStorage.setItem을 직접 호출해 예외를 전달한다.",
+      "캐시는 setItem이 성공한 뒤에만 교체한다.",
+      "StoreReadError와 StoreWriteError는 Error를 상속한 class로 export한다.",
+      "id는 crypto.randomUUID()를 쓰고, 없으면 Date.now()와 Math.random()으로 만든다.",
+      "네트워크 호출과 외부 SDK import가 0건이다.",
+      "`tsc --noEmit`이 통과한다."
+    ],
+    "depends_on": [
+      "0001"
+    ],
+    "db_schema": "localStorage key 'rwb:items:v1'에 JSON 배열 ReturnItem[]를 저장한다. 쓰기는 항상 '전체 배열 1회 setItem'이다. 부분 쓰기는 없다.",
+    "api_contract": "class StoreReadError extends Error; class StoreWriteError extends Error; loadItems(): ReturnItem[] (throws StoreReadError); reloadItems(): ReturnItem[] (캐시 무시하고 재파싱); getItem(id: string): ReturnItem | undefined; addItem(input: ItemFormInput): ReturnItem; updateItem(id: string, input: ItemFormInput): ReturnItem; deleteItem(id: string): void; setStatus(id: string, status: ItemStatus): ReturnItem; toggleCheck(id: string, checkId: string): ReturnItem; addCheck(id: string, label: string): ReturnItem; removeCheck(id: string, checkId: string): ReturnItem; recentStores(items: ReturnItem[]): string[]. 쓰기 함수 7개는 모두 실패 시 StoreWriteError를 던진다. checklistPresets.ts는 seedChecklist(rule: DeadlineRule): ChecklistItem[]를 export한다.",
+    "dependencies": [],
+    "ui_requirements": "UI 없는 저장소 패킷이다. 블루프린트의 쓰기 실패 상태가 이 모듈의 예외에 의존한다.\n- ItemFormSheet: StoreWriteError를 받으면 시트와 입력값을 유지하고 hint를 표시한다.\n- Result: StoreWriteError를 받으면 이전 snapshot으로 되돌리고 Toast를 띄운다.\n- 삭제 실패: navigate하지 않는다.\n- Home·Result 오류 화면: StoreReadError를 받으면 '저장된 목록을 불러오지 못했어요'와 '다시 시도' 버튼을 표시한다."
+  },
+  {
+    "id": "0004",
+    "title": "ItemFormSheet — 등록·수정 공용 BottomSheet + 검증",
+    "epic": "Epic 2: Form",
+    "task": {
+      "description": "src/lib/validateForm.ts는 validateForm(input, today)를 순수 함수로 구현하고 {valid, firstHint, fieldErrors}를 반환한다. src/components/ItemFormSheet.tsx는 등록과 수정을 함께 쓰는 TDS BottomSheet다.\n- props: mode, initial, open, onClose, onSaved\n- touched 상태를 추적해 blur 뒤에만 빨간 칸을 표시한다.\n- 최근 구매처 ChipItem, 기한 유형 Chip, 정책 일수 칸, 마감 미리보기, focus 시 scrollIntoView를 둔다.\n- StoreWriteError가 나면 시트를 유지하고 실패 hint를 표시한다.",
+      "acceptance_criteria": [
+        "create 모드로 처음 열면 다음과 같다.\n- 수령일 = todayYmd(), 나머지 칸은 빈 값\n- hasError가 true인 TextField 0개\n- '저장하기' 비활성\n- hint = '상품명을 입력해 주세요'",
+        "firstHint는 상품명 → 구매처 → 수령일 → 기한 유형 → 일수 순서에서 첫 빈 항목의 문구 하나다. 문구는 '상품명을 입력해 주세요', '구매처를 입력해 주세요', '수령일을 선택해 주세요', '기한 유형을 선택해 주세요', '구매처 반품 기한을 입력해 주세요'다.",
+        "범위 오류이면 해당 칸 help에 다음 문구가 나오고 저장 버튼이 비활성된다.\n- 상품명 41자: '40자 이내로 입력해 주세요'\n- 일수 0, 366, 2.5, 'abc': '1~365일 사이 숫자로 입력해 주세요'\n- 수령일 > 오늘: '수령일은 오늘 이후일 수 없어요'\n- 사용 시작일 < 수령일: '사용 시작일은 수령일 이후여야 해요'",
+        "'구매처 정책' ChipItem을 선택했을 때만 '구매처 반품 기한(일)' TextField가 렌더링된다.",
+        "유효한 입력이면 '마감: {formatKoreanDate} · {ddayLabel}' 미리보기 한 줄이 보인다. 예: 수령일 2026-10-01, 7일 → '마감: 10월 8일 (목) · D-DAY'(오늘 2026-10-08 기준).",
+        "recentStores가 1개 이상이면 구매처 아래에 ChipItem이 최대 5개 보인다. 탭하면 구매처 값이 그 이름이 된다. 0개면 Chip 영역이 DOM에 없다.",
+        "edit 모드에서 initial을 주면 모든 칸이 기존 값으로 채워진다. 저장하면 updateItem이 호출되고, onSaved(갱신된 item)를 부른 뒤 시트가 닫힌다.",
+        "addItem/updateItem이 StoreWriteError를 던지면 다음과 같다.\n- 시트가 열린 채 입력값이 유지된다.\n- hint = '저장하지 못했어요. 보관함의 지난 건을 삭제한 뒤 다시 시도해 주세요'\n- '저장하기'는 활성 상태다.\n- 입력값을 하나라도 바꾸면 실패 hint가 사라진다.",
+        "TextField onFocus에서 e.target.scrollIntoView({ block: 'center' })가 호출된다. 모든 TextField와 ChipItem에 aria-label이 있다."
+      ]
+    },
+    "covers": [
+      "F1-AC-4",
+      "F1-AC-5",
+      "F1-AC-6",
+      "F1-AC-7",
+      "AC-INPUT-1",
+      "AC-INPUT-2",
+      "AC-KEYBOARD",
+      "AC-A11Y-1",
+      "AC-STORAGE-WRITE-1"
+    ],
+    "files": [
+      "src/lib/validateForm.ts",
+      "src/components/ItemFormSheet.tsx"
+    ],
+    "definition_of_done": [
+      "UI는 TDS BottomSheet, TextField(variant='box'), Chip/ChipItem, Paragraph.Text, Spacing과 템플릿 SubmitFooter로만 구성한다.",
+      "인라인 margin/padding과 HEX 색상이 0건이다. 색은 var(--adaptive*)만 쓴다.",
+      "햅틱은 다음과 같다. 템플릿 헬퍼가 없으면 @apps-in-toss/web-framework generateHapticFeedback을 쓴다.\n- ChipItem 탭: tickWeak\n- '저장하기': success",
+      "validateForm은 React import 없는 순수 함수다.",
+      "StoreWriteError 외의 예외는 다시 throw한다.",
+      "`tsc --noEmit`이 통과한다."
+    ],
+    "depends_on": [
+      "0002",
+      "0003"
+    ],
+    "db_schema": "",
+    "api_contract": "validateForm(input: ItemFormInput, today: string): { valid: boolean; firstHint?: string; fieldErrors: Partial<Record<'productName'|'store'|'receivedDate'|'rule'|'storePolicyDays'|'useStartDate', string>> }; <ItemFormSheet open: boolean; mode: 'create' | 'edit'; initial?: ReturnItem; onClose: () => void; onSaved: (item: ReturnItem) => void />",
+    "dependencies": [
+      "@toss/tds-mobile",
+      "@apps-in-toss/web-framework"
+    ],
+    "ui_requirements": "## Screen: ItemFormSheet — 등록·수정 공용 시트 (Home·Result에서 열림)\n\n### Pattern\nInputForm\n\n### TDS Components (whitelist)\n- TDS: BottomSheet, TextField, Chip, ChipItem, Paragraph, Spacing\n- 템플릿: SubmitFooter\n\n### Layout\n<BottomSheet open={open} onClose={onClose}\n  header={<BottomSheet.Header>{mode === 'create' ? '반품 건 추가' : '반품 건 수정'}</BottomSheet.Header>}\n  cta={<SubmitFooter label='저장하기' onClick={handleSave}\n    disabled={!valid} hint={!valid ? firstHint : writeFailed ? WRITE_FAIL_HINT : undefined} />}>\n  <TextField variant='box' label='상품명' labelOption='sustain' placeholder='예: 니트 가디건'\n    aria-label='상품명' value={f.productName} onChange={...} onBlur={touch('productName')}\n    hasError={t.productName && !!e.productName} help={t.productName ? e.productName : undefined} />\n  <Spacing size={16} />\n  <TextField variant='box' label='구매처' labelOption='sustain' placeholder='예: 공식 온라인몰' aria-label='구매처' ... />\n  {recentStores.length > 0 && (<><Spacing size={8} />\n    <Chip kind='action' size='small' wrap>\n      {recentStores.map((s) => <ChipItem key={s} aria-label={`구매처 ${s}`} onClick={() => setStore(s)}>{s}</ChipItem>)}\n    </Chip></>)}\n  <Spacing size={16} />\n  <TextField variant='box' type='date' label='수령일' labelOption='sustain' aria-label='수령일' ... />\n  <Spacing size={16} />\n  <Paragraph.Text typography='t6' color='var(--adaptiveGrey600)'>기한 유형</Paragraph.Text>\n  <Spacing size={8} />\n  <Chip kind='select' wrap>\n    {RULES.map((r) => <ChipItem key={r.value} aria-label={r.label} selected={f.rule === r.value} onClick={...}>{r.label}</ChipItem>)}\n  </Chip>  {/* 단순 변심 7일 · 하자·광고와 다름 3개월 · 구매처 정책 */}\n  {f.rule === 'store_policy_days' && (<><Spacing size={16} />\n    <TextField variant='box' label='구매처 반품 기한(일)' labelOption='sustain' placeholder='예: 30' aria-label='구매처 반품 기한' ... /></>)}\n  <Spacing size={16} />\n  <TextField variant='box' type='date' label='사용 시작일 (선택)' labelOption='sustain' aria-label='사용 시작일' ... />\n  {preview && (<><Spacing size={16} />\n    <Paragraph.Text typography='t5'>마감: {formatKoreanDate(preview.deadline)} · {ddayLabel(preview.dDay)}</Paragraph.Text></>)}\n</BottomSheet>\n\n### States\n- 처음 열 때\n  - create 모드: 수령일은 오늘, 나머지는 빈 값입니다.\n  - edit 모드: initial 값을 채웁니다.\n  - touched가 모두 false라서 빨간 칸이 0개입니다.\n- 검증 (validateForm)\n  - firstHint는 첫 번째 빈 항목 하나만 보여 줍니다. 예: '상품명을 입력해 주세요'\n  - 칸별 help 문구:\n    - 상품명 40자 초과: '40자 이내로 입력해 주세요'\n    - 일수 범위 밖: '1~365일 사이 숫자로 입력해 주세요'\n    - 수령일이 오늘 이후: '수령일은 오늘 이후일 수 없어요'\n    - 사용 시작일이 수령일보다 앞: '사용 시작일은 수령일 이후여야 해요'\n- 쓰기 실패 (StoreWriteError)\n  - 시트와 입력값을 그대로 둡니다.\n  - hint에 '저장하지 못했어요. 보관함의 지난 건을 삭제한 뒤 다시 시도해 주세요'를 표시합니다.\n  - 버튼은 활성 상태로 둡니다. 입력값이 바뀌면 이 실패 hint를 지웁니다.\n\n### Interactions\n- ChipItem 탭 (기한 유형, 최근 구매처): tickWeak 햅틱.\n- '저장하기': success 햅틱 후 addItem 또는 updateItem을 호출합니다. 성공하면 onSaved()를 부르고 시트를 닫습니다.\n- TextField focus: e.target.scrollIntoView({ block: 'center' })를 호출합니다(AC-KEYBOARD).\n\n### 구현 전 확인\n- SubmitFooter의 fixed 배치가 시트 안에서 깨질 수 있습니다. 그 경우 cta={<BottomSheet.CTA onClick>저장하기</BottomSheet.CTA>}로 바꾸고, hint는 본문 마지막 Paragraph.Text(t6)로 옮깁니다.\n- SubmitFooter가 aria-label을 내부 Button에 넘기는지 확인합니다.\n- TextField의 type='date'와 onBlur prop은 .d.ts로 확인합니다."
+  },
+  {
+    "id": "0005",
+    "title": "Home Page — D-day 보드 + AdBoundary",
+    "epic": "Epic 3: Pages",
+    "task": {
+      "description": "src/pages/Home.tsx는 D-day 보드다. 마운트 후 loadItems로 저장소를 읽고, 그동안 Skeleton을 보여 준다.\n- 진행 중/보관함 Tab, 정렬 목록, 오늘 마감 Badge, 요약 문구, 보관함 라벨\n- 상태 화면: Empty State, 오류와 다시 시도\n- '반품 건 추가'로 ItemFormSheet(create)를 연다.\n- 목록 아래 AdSlot을 둔다.\nsrc/components/AdBoundary.tsx는 class 기반 error boundary로, 오류가 나면 null을 렌더링한다. AdSlot은 이것으로 감싸고 템플릿 AdSlot은 고치지 않는다.",
+      "acceptance_criteria": [
+        "진행 중 3건(마감까지 5·0·2일)이 저장돼 있을 때 '진행 중' 탭은 다음과 같다.\n- 순서: D-DAY → D-2 → D-5\n- 각 ListRow: 상품명, '구매처 · 10월 15일 (목)' 형식, D-day 텍스트\n- D-0 줄에만 '오늘 마감' Badge",
+        "요약 문구는 다음과 같다.\n- 위 3건 예시: '오늘 마감 1건 · 3일 안에 1건'\n- todayCount와 within3Count가 모두 0: '가장 가까운 마감: {상품명} D-{n}'\n- 진행 중 0건: SummaryHero를 렌더링하지 않는다.",
+        "보관함 탭은 다음과 같다.\n- 마감이 지난 active 건: '기한 지남' Badge\n- returned 건: '반품 신청함' Badge\n- kept 건: '계속 쓰기로 함' Badge\n- 정렬은 마감일 내림차순이다. 저장된 status는 바뀌지 않는다.\nTab 라벨은 '진행 중 {n}'·'보관함 {n}'이고 숫자는 formatNumber를 거친다.",
+        "저장된 건이 0개면 다음과 같다.\n- EmptyState '아직 등록한 주문이 없어요' / '받은 날만 넣으면 반품 마감일을 계산해 드려요'와 '첫 주문 등록하기' 버튼\n- SummaryHero, Tab, SubmitFooter는 렌더링하지 않는다.\n보관함 탭이 비어 있으면 '보관함이 비어 있어요'가 표시된다.",
+        "저장소를 처음 읽기 전 렌더에는 Skeleton 막대 3개만 있고 Tab·ListRow는 0개다. loadItems가 StoreReadError를 던지면 '저장된 목록을 불러오지 못했어요'와 '다시 시도' 버튼이 보인다. 버튼을 누르면 reloadItems로 다시 읽는다.",
+        "ListRow를 탭하면 navigate(`/result/${id}`)가 호출된다.",
+        "'반품 건 추가'를 누르면 ItemFormSheet가 create 모드로 열린다. 저장에 성공하면 시트가 닫히고 새 줄이 즉시 목록에 보인다.",
+        "AdSlot은 목록 아래에 1개만 있고, ListRow 사이에는 없다. AdSlot이 렌더 중 throw하도록 mock해도 다음이 모두 성립한다.\n- 요약·Tab·목록·'반품 건 추가'가 보인다.\n- 오류 화면 문구가 0건이다.\n- 광고 영역 DOM이 비어 있다.",
+        "VITE_TOSS_AD_GROUP_ID가 빈 값이어도 같은 결과다."
+      ]
+    },
+    "covers": [
+      "F2-AC-1",
+      "F2-AC-2",
+      "F2-AC-3",
+      "F2-AC-6",
+      "F2-AC-7",
+      "AC-EMPTY",
+      "AC-LOADING",
+      "AC-ERROR",
+      "AC-FORMAT",
+      "AC-AD-FAIL"
+    ],
+    "files": [
+      "src/pages/Home.tsx",
+      "src/components/AdBoundary.tsx"
+    ],
+    "definition_of_done": [
+      "여백은 Spacing만 쓴다. 인라인 margin/padding은 0건이고, 커스텀 div는 flex 배치와 Skeleton 막대에만 쓴다.",
+      "Skeleton 배경은 var(--adaptiveGrey100)이다. HEX는 0건이다.",
+      "햅틱은 다음과 같다.\n- Tab 전환: tickWeak\n- '반품 건 추가', '첫 주문 등록하기': success",
+      "AdBoundary는 componentDidCatch에서 console.error를 호출하지 않고 state만 바꾼다. 정상 흐름에서 console.error는 0건이다.",
+      "하단 고정 요소는 템플릿 SubmitFooter를 쓴다. 커스텀 fixed 요소를 만들면 padding-bottom에 env(safe-area-inset-bottom)를 반영한다.",
+      "TossRewardAd import가 0건이다.",
+      "`tsc --noEmit`이 통과한다."
+    ],
+    "depends_on": [
+      "0002",
+      "0003",
+      "0004"
+    ],
+    "db_schema": "",
+    "api_contract": "export default function Home(): JSX.Element; export class AdBoundary extends React.Component<{children: React.ReactNode}, {failed: boolean}> (getDerivedStateFromError → {failed: true}, failed면 null 렌더)",
+    "dependencies": [
+      "@toss/tds-mobile",
+      "react-router-dom",
+      "@apps-in-toss/web-framework"
+    ],
+    "ui_requirements": "## Screen: Home — D-day 보드 (/)\n\n### Pattern\nFixedBottomCTA\n\n### TDS Components (whitelist)\n- TDS: Top, Paragraph, Tab, ListRow, Badge, Button, Spacing\n- 템플릿: SummaryHero, EmptyState, SubmitFooter, AdSlot\n- 로컬: AdBoundary, ItemFormSheet\n\n### Layout\n<Top title={<Top.TitleParagraph>반품 마감 보드</Top.TitleParagraph>} />\n<Spacing size={8} />\n{activeCount > 0 && (  // 진행 중 0건이면 요약 생략\n  <SummaryHero label='반품 마감 요약'\n    value={<Paragraph.Text typography='t1'>{nearestDdayLabel}</Paragraph.Text>}\n    caption={summaryText} />  // F2-AC-2 문구를 글자 그대로\n)}\n<Spacing size={16} />\n<Tab onChange={onTabChange}>\n  <Tab.Item selected={section === 'active'}>진행 중 {formatNumber(activeCount)}</Tab.Item>\n  <Tab.Item selected={section === 'archive'}>보관함 {formatNumber(archiveCount)}</Tab.Item>\n</Tab>\n<Spacing size={8} />\n{rows.map((it) => (\n  <ListRow key={it.id} onClick={() => navigate(`/result/${it.id}`)}\n    contents={<ListRow.Texts type='2RowTypeA' top={it.productName}\n      bottom={`${it.store} · ${formatKoreanDate(it.deadline)}`} />}\n    right={<div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>\n      {section === 'active'\n        ? <>{it.dDay === 0 && <Badge size='small' variant='fill' color='red'>오늘 마감</Badge>}\n            <Paragraph.Text typography='t5'>{ddayLabel(it.dDay)}</Paragraph.Text></>\n        : <Badge size='small' variant='weak' color={archiveColor[it.reason]}>{archiveLabel[it.reason]}</Badge>}\n    </div>} />\n))}\n<Spacing size={24} />\n<AdBoundary><AdSlot adGroupId={import.meta.env.VITE_TOSS_AD_GROUP_ID} /></AdBoundary>\n<Spacing size={32} />\n{items.length > 0 && <SubmitFooter label='반품 건 추가' onClick={openCreate} />}\n<ItemFormSheet open={sheetOpen} mode='create' onClose={...} onSaved={reload} />\n\n- summaryText\n  - 기본: '오늘 마감 {n}건 · 3일 안에 {m}건'\n  - n·m이 모두 0일 때: '가장 가까운 마감: {상품명} D-{n}'\n- archiveLabel / archiveColor\n  - returned: '반품 신청함', blue\n  - kept: '계속 쓰기로 함', teal\n  - expired: '기한 지남', elephant\n\n### States\n- Loading\n  - Skeleton 막대 3개를 그립니다. div 높이 56, borderRadius 12, 배경 var(--adaptiveGrey100)이고, 사이에 <Spacing size={8} />를 둡니다.\n  - Tab과 목록은 렌더링하지 않습니다.\n- Empty (전체 0건)\n  - SummaryHero, Tab, SubmitFooter를 숨깁니다.\n  - <EmptyState title='아직 등록한 주문이 없어요' description='받은 날만 넣으면 반품 마감일을 계산해 드려요' action={<Button variant='weak' aria-label='첫 주문 등록하기' onClick={openCreate}>첫 주문 등록하기</Button>} />\n- Empty (보관함 탭 0건)\n  - <EmptyState title='보관함이 비어 있어요' />. action은 없습니다.\n- Error\n  - <Paragraph.Text typography='t5'>저장된 목록을 불러오지 못했어요</Paragraph.Text>\n  - <Spacing size={12} />\n  - <Button variant='weak' aria-label='다시 시도' onClick={reload}>다시 시도</Button>\n  - 광고 오류는 이 화면으로 오지 않습니다. AdBoundary가 null로 처리합니다.\n\n### Interactions\n- Tab 전환: tickWeak 햅틱 후 section을 바꿉니다.\n- ListRow 탭: /result/{id}로 이동합니다(F2-AC-5).\n- '반품 건 추가' / '첫 주문 등록하기': success 햅틱 후 ItemFormSheet(create)를 엽니다. 저장에 성공하면 시트를 닫고 목록을 즉시 다시 읽습니다.\n- 정렬\n  - 진행 중: sortActive(D-day 오름차순, 같으면 createdAt 오름차순)\n  - 보관함: sortArchive(마감일 내림차순)"
+  },
+  {
+    "id": "0006",
+    "title": "ChecklistSection — 환불 체크리스트 (토글·추가·삭제·롤백)",
+    "epic": "Epic 3: Pages",
+    "task": {
+      "description": "src/components/ChecklistSection.tsx는 Result 안의 환불 체크리스트 섹션이다.\n- 제목 옆에 '{완료}/{전체} 완료' Badge를 둔다.\n- 항목마다 ListRow와 Switch, '삭제' 버튼을 둔다.\n- 하단 TextField와 '추가' 버튼으로 항목을 추가한다.\n- 변경은 즉시 itemsStore에 저장한다.\n- StoreWriteError가 나면 이전 snapshot으로 되돌리고 TDS Toast로 '저장하지 못했어요. 다시 시도해 주세요'를 띄운다.\n갱신된 item은 onChange로 부모에 올린다.",
+      "acceptance_criteria": [
+        "Switch 토글은 즉시 저장된다. Badge 숫자가 바뀌고, 리마운트하거나 새로고침한 뒤에도 같은 체크 상태가 보인다.",
+        "'추가' 동작은 다음과 같다.\n- TextField가 비었거나 trim 후 0자 또는 30자 초과면 '추가' 버튼이 disabled다.\n- 1~30자를 추가하면 목록 끝에 새 항목이 생기고 입력칸이 비워진다.",
+        "항목의 '삭제' 버튼을 누르면 그 항목이 목록에서 사라지고, 새로고침 후에도 없다.",
+        "setItem이 QuotaExceededError를 던지도록 mock했을 때 다음이 모두 성립한다.\n- 토글: Switch가 원래 위치로 돌아가고 '{완료}/{전체} 완료' 숫자도 원래 값이다.\n- 추가: 새 항목이 없고 입력값은 남아 있다.\n- 삭제: 지운 항목이 같은 자리에 다시 보인다.\n세 경우 모두 Toast '저장하지 못했어요. 다시 시도해 주세요'가 표시된다.",
+        "모든 Switch에는 aria-label={항목 label}이 있다. 삭제 버튼에는 aria-label='{label} 삭제', 입력칸에는 '새 체크 항목', 추가 버튼에는 '추가'가 있다. 완료 숫자는 formatNumber를 거친다."
+      ]
+    },
+    "covers": [
+      "F3-AC-4",
+      "AC-STORAGE-WRITE-2",
+      "AC-A11Y-1",
+      "AC-FORMAT"
+    ],
+    "files": [
+      "src/components/ChecklistSection.tsx"
+    ],
+    "definition_of_done": [
+      "TDS ListRow, Switch, Button(variant fill|weak), TextField(variant='box'), Badge, Paragraph.Text, Spacing, useToast만 쓴다.",
+      "커스텀 div는 flex 배치에만 쓰고, 인라인 margin/padding과 HEX는 0건이다.",
+      "햅틱은 다음과 같다.\n- Switch: tickWeak\n- 추가: success\n- 삭제: tickStrong (SDK 타입에 없으면 tickMedium)",
+      "StoreWriteError 외의 예외는 다시 throw한다.",
+      "`tsc --noEmit`이 통과한다."
+    ],
+    "depends_on": [
+      "0003"
+    ],
+    "db_schema": "",
+    "api_contract": "<ChecklistSection item: ReturnItem; onChange: (item: ReturnItem) => void />. 내부에서 toggleCheck, addCheck, removeCheck(itemsStore)를 호출한다.",
+    "dependencies": [
+      "@toss/tds-mobile",
+      "@apps-in-toss/web-framework"
+    ],
+    "ui_requirements": "## Result 블루프린트 중 체크리스트 섹션 (F3-AC-4)\n\n<div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>\n  <Paragraph.Text typography='t4'>환불 체크리스트</Paragraph.Text>\n  <Badge size='small' variant='weak' color='blue'>{formatNumber(done)}/{formatNumber(total)} 완료</Badge>\n</div>\n<Spacing size={8} />\n{item.checklist.map((c) => (\n  <ListRow key={c.id} contents={<ListRow.Texts type='1RowTypeA' top={c.label} />}\n    right={<div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>\n      <Switch checked={c.done} aria-label={c.label} onChange={() => onToggle(c.id)} />\n      <Button variant='weak' size='small' color='dark' aria-label={`${c.label} 삭제`} onClick={() => onRemove(c.id)}>삭제</Button>\n    </div>} />\n))}\n<Spacing size={12} />\n<div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>\n  <div style={{ flex: 1 }}><TextField variant='box' label='새 항목' placeholder='예: 영수증 출력해 두기' aria-label='새 체크 항목' value={draft} onChange={...} /></div>\n  <Button variant='weak' size='medium' aria-label='추가' disabled={!draftValid} onClick={onAdd}>추가</Button>\n</div>\n\n### States\n- 쓰기 실패 (AC-STORAGE-WRITE-2)\n  - 낙관적 갱신을 했다면 이전 snapshot으로 되돌립니다.\n  - openToast('저장하지 못했어요. 다시 시도해 주세요')를 띄웁니다.\n  - 항목 추가가 실패하면 draft 입력값을 유지합니다.\n\n### Interactions\n- Switch 토글: tickWeak 햅틱 후 toggleCheck를 즉시 저장합니다.\n- 체크 항목 '추가': success 햅틱 후 addCheck를 호출합니다. 성공하면 draft를 비웁니다. 빈 값이면 버튼이 비활성됩니다.\n- 체크 항목 '삭제': tickStrong 햅틱 후 removeCheck를 호출합니다.\n\n### 구현 전 확인\n- Switch의 checked/onChange와 ListRow.Texts type='1RowTypeA'는 .d.ts로 확인합니다."
+  },
+  {
+    "id": "0007",
+    "title": "Result Page — 상세 (핵심 답·기한 안내·상태·수정·삭제)",
+    "epic": "Epic 3: Pages",
+    "task": {
+      "description": "src/pages/Result.tsx는 useParams의 id로 저장소에서 건을 찾아 상세를 그린다.\n- 맨 위 핵심 답: 마감일, D-day, 적용 규칙 출처\n- 안내: 사용 시작일 차이, 유형별 사용 제한 또는 30일 조건, 반품 비용\n- 본문: ChecklistSection, 상태 버튼, 수정(ItemFormSheet edit), 삭제(AlertDialog)\n- 하단: AdBoundary로 감싼 AdSlot\n- 상태 화면: 로딩, 찾을 수 없음, 오류\n- 쓰기 실패: 상태 변경은 롤백하고 Toast, 삭제는 이동하지 않고 Toast\nTossRewardAd는 쓰지 않는다.",
+      "acceptance_criteria": [
+        "핵심 답은 다음과 같다.\n- Top에 상품명\n- SummaryHero에 ddayLabel과 '{formatKoreanDate(deadline)} 마감'\n- 그 아래 ruleSourceLine. 예: 7d → '수령일부터 7일 · 전자상거래법 제17조 ①', policy 30 → '구매처 정책 30일 · 구매처 안내 기준'",
+        "사용 시작일 안내는 다음과 같다.\n- 수령 2026-10-01, 사용 시작 2026-10-04, 7d → '사용 시작일로 세면 10월 11일 (일)이지만, 기한은 수령일부터 세서 실제 마감은 10월 8일 (목)이에요 — 3일 빨라요'\n- 사용 시작일이 없거나 수령일과 같으면 '기한은 상품을 받은 날부터 세요' 한 줄만 표시된다.",
+        "유형별 안내는 다음과 같다. 문구는 RULE_NOTICE와 COST_LINE 상수와 글자 단위로 같다.\n- 7d: 제17조 ② 안내만\n- 3m: 30일 조건(제17조 ③) 안내만\n- policy: 둘 다 없음\n- 비용 안내: 유형별 COST_LINE 한 줄",
+        "상태 버튼은 다음과 같다.\n- active이고 미만료: '반품 신청함'·'계속 쓰기로 함'\n- 보관함 상태이고 미만료: '진행 중으로 되돌리기'만\n- 만료 건: 상태 버튼 0개\n누르면 setStatus로 저장되고 화면에 머문 채 SummaryHero 라벨이 ARCHIVE_LABEL 또는 '반품 마감까지'로 바뀐다.",
+        "'수정'을 누르면 ItemFormSheet가 edit 모드로 initial=item과 함께 열린다. 수정을 저장하면 마감일·D-day·안내가 다시 계산되어 표시된다.",
+        "'삭제'를 누르면 AlertDialog '이 건을 삭제할까요?'가 뜬다. '삭제하기'를 누르면 deleteItem 후 navigate('/')가 호출된다.",
+        "deleteItem이 StoreWriteError를 던지면 다음과 같다.\n- navigate가 호출되지 않는다.\n- AlertDialog가 닫힌다.\n- Toast '삭제하지 못했어요. 다시 시도해 주세요'가 표시되고 상세가 그대로 보인다.",
+        "setStatus가 StoreWriteError를 던지면 상태 버튼과 SummaryHero 라벨이 바뀌지 않고, Toast '저장하지 못했어요. 다시 시도해 주세요'가 표시된다.",
+        "id가 저장소에 없으면 다음과 같다.\n- '찾을 수 없는 건이에요'와 '목록으로' 버튼이 보이고, 버튼을 누르면 '/'로 이동한다.\n저장소 상태에 따라 화면이 다음처럼 바뀐다.\n- 첫 읽기 전: Skeleton 3개만 보인다.\n- StoreReadError: '저장된 목록을 불러오지 못했어요'와 '다시 시도'가 보인다.",
+        "하단에 AdBoundary로 감싼 AdSlot이 정확히 1개 있다. AdSlot이 throw하도록 mock해도 핵심 답, 안내, 체크리스트, 상태 버튼이 보이고 오류 화면이 뜨지 않는다. 파일 안 TossRewardAd 문자열은 0건이다."
+      ]
+    },
+    "covers": [
+      "F3-AC-1",
+      "F3-AC-2",
+      "F3-AC-3",
+      "F3-AC-5",
+      "F3-AC-6",
+      "F3-AC-7",
+      "F2-AC-4",
+      "F1-AC-5",
+      "AC-LOADING",
+      "AC-ERROR",
+      "AC-FORMAT",
+      "AC-AD-FAIL",
+      "AC-REWARD",
+      "AC-STORAGE-WRITE-2",
+      "AC-STORAGE-WRITE-3"
+    ],
+    "files": [
+      "src/pages/Result.tsx"
+    ],
+    "definition_of_done": [
+      "문구는 types.ts 상수(ruleSourceLine, RULE_NOTICE, COST_LINE, ARCHIVE_LABEL, MESSAGES)만 쓴다. 하드코딩한 중복 문구는 0건이다.",
+      "Button은 variant fill|weak만 쓴다. 여백은 Spacing만 쓰고, 인라인 margin/padding과 HEX는 0건이다.",
+      "햅틱은 다음과 같다.\n- 상태 버튼: success\n- 삭제하기: tickStrong (SDK 타입에 없으면 tickMedium)",
+      "AlertDialog는 onClose(바깥 탭·뒤로가기)로 닫힌다. TDS에 2버튼 다이얼로그가 있으면 왼쪽 '닫기', 오른쪽 '삭제하기'로 구성한다.",
+      "모든 Button에 aria-label이 있다.",
+      "`tsc --noEmit`이 통과한다."
+    ],
+    "depends_on": [
+      "0002",
+      "0003",
+      "0004",
+      "0005",
+      "0006"
+    ],
+    "db_schema": "",
+    "api_contract": "export default function Result(): JSX.Element. useParams<ResultParams>()를 쓴다. 쓰는 저장소 함수는 loadItems, reloadItems, getItem, setStatus, deleteItem(itemsStore)이고, 쓰는 컴포넌트는 ItemFormSheet, ChecklistSection, AdBoundary다.",
+    "dependencies": [
+      "@toss/tds-mobile",
+      "react-router-dom",
+      "@apps-in-toss/web-framework"
+    ],
+    "ui_requirements": "## Screen: Result — 상세 (/result/:id)\n\n### Pattern\nStatusPanel\n\n### TDS Components (whitelist)\n- TDS: Top, Paragraph, ListRow, Switch, TextField, Button, Badge, AlertDialog, Spacing\n- 템플릿: SummaryHero, EmptyState, AdSlot\n- 로컬: AdBoundary, ItemFormSheet, ChecklistSection\n- 그 밖: useToast\n\n### Layout\n<Top title={<Top.TitleParagraph>{item.productName}</Top.TitleParagraph>}\n  right={<Button variant='weak' size='small' aria-label='수정' onClick={openEdit}>수정</Button>} />\n<Spacing size={8} />\n<SummaryHero label={archiveLabel ?? '반품 마감까지'}  // 보관함 건은 상태 라벨\n  value={<Paragraph.Text typography='t1'>{ddayLabel(info.dDay)}</Paragraph.Text>}\n  caption={`${formatKoreanDate(info.deadline)} 마감`} />\n<Spacing size={8} />\n<Paragraph.Text typography='t6' color='var(--adaptiveGrey600)'>{ruleSourceLine}</Paragraph.Text>  {/* F3-AC-1 */}\n<Spacing size={24} />\n<Paragraph.Text typography='t4'>기한 안내</Paragraph.Text>\n<Spacing size={12} />\n<Paragraph.Text typography='t5'>{useStartLine}</Paragraph.Text>  {/* F3-AC-2 */}\n<Spacing size={8} />\n{ruleNotice && (<><Paragraph.Text typography='t6' color='var(--adaptiveGrey600)'>{ruleNotice}</Paragraph.Text><Spacing size={8} /></>)}  {/* F3-AC-3 또는 F3-AC-7 */}\n<Paragraph.Text typography='t6' color='var(--adaptiveGrey600)'>{costLine}</Paragraph.Text>  {/* F3-AC-5 */}\n<Spacing size={24} />\n<ChecklistSection item={item} onChange={setItem} />  {/* 패킷 0006 */}\n<Spacing size={32} />\n{item.status === 'active' && !info.isExpired && (\n  <div style={{ display: 'flex', gap: 8 }}>\n    <Button variant='fill' size='large' aria-label='반품 신청함' onClick={() => onStatus('returned')}>반품 신청함</Button>\n    <Button variant='weak' size='large' aria-label='계속 쓰기로 함' onClick={() => onStatus('kept')}>계속 쓰기로 함</Button>\n  </div>)}\n{item.status !== 'active' && !info.isExpired && (\n  <Button variant='weak' size='large' aria-label='진행 중으로 되돌리기' onClick={() => onStatus('active')}>진행 중으로 되돌리기</Button>)}\n<Spacing size={12} />\n<Button variant='weak' color='danger' size='large' aria-label='삭제' onClick={() => setConfirmOpen(true)}>삭제</Button>\n<Spacing size={24} />\n<AdBoundary><AdSlot adGroupId={import.meta.env.VITE_TOSS_AD_GROUP_ID} /></AdBoundary>\n<AlertDialog open={confirmOpen} title='이 건을 삭제할까요?' onClose={() => setConfirmOpen(false)}\n  alertButton={<AlertDialog.AlertButton onClick={onDelete}>삭제하기</AlertDialog.AlertButton>} />\n<ItemFormSheet open={editOpen} mode='edit' initial={item} onClose={...} onSaved={reload} />\n\n- useStartLine (F3-AC-2)\n  - 사용 시작일이 수령일보다 뒤: '사용 시작일로 세면 {X}이지만, 기한은 수령일부터 세서 실제 마감은 {Y}이에요 — {n}일 빨라요'\n  - 그 밖: '기한은 상품을 받은 날부터 세요'\n- 문구 출처: ruleSourceLine, ruleNotice, costLine은 F3 AC 문구를 상수로 옮겨 글자 단위로 일치시킵니다.\n\n### States\n- Loading: Home과 같은 Skeleton 막대 3개를 그리고, 상세는 렌더링하지 않습니다.\n- 찾을 수 없음 (F3-AC-6)\n  - <EmptyState title='찾을 수 없는 건이에요' action={<Button variant='weak' aria-label='목록으로' onClick={() => navigate('/')}>목록으로</Button>} />\n- Error: '저장된 목록을 불러오지 못했어요'와 <Button variant='weak' aria-label='다시 시도'>다시 시도</Button>를 표시합니다(Home과 같은 구성).\n- 쓰기 실패 (AC-STORAGE-WRITE-2): 상태 변경이 실패하면 이전 값을 유지하고 openToast('저장하지 못했어요. 다시 시도해 주세요')를 띄웁니다.\n- 삭제 실패 (AC-STORAGE-WRITE-3)\n  - AlertDialog를 닫고, navigate하지 않습니다.\n  - openToast('삭제하지 못했어요. 다시 시도해 주세요')를 띄웁니다.\n\n### Interactions\n- '반품 신청함' / '계속 쓰기로 함' / '진행 중으로 되돌리기': success 햅틱 후 setStatus를 호출합니다. 화면에 머문 채로 SummaryHero 라벨과 버튼 구성만 바뀝니다.\n- '수정': ItemFormSheet(edit)를 엽니다. 저장하면 마감일을 다시 계산해 반영합니다.\n- '삭제하기'(AlertDialog): tickStrong 햅틱 후 deleteItem을 호출합니다. 성공하면 navigate('/')로 이동합니다.\n- TossRewardAd 없음 (AC-REWARD).\n\n### 구현 전 확인\n- 사전의 AlertDialog는 버튼이 하나뿐이라 지금은 onClose(바깥 탭·뒤로가기)로만 닫힙니다.\n- 2버튼 다이얼로그를 쓸 수 있으면 왼쪽 '닫기', 오른쪽 '삭제하기'로 바꾸는 쪽이 안전합니다."
+  },
+  {
+    "id": "0008",
+    "title": "Routing & Integration — App 라우트 연결과 검수 점검",
+    "epic": "Epic 4: Integration & Routing",
+    "task": {
+      "description": "src/App.tsx에 react-router-dom Routes를 연결한다.\n- '/' → Home\n- '/result/:id' → Result\n- 그 밖의 경로 → <Navigate to='/' replace />\n템플릿의 기존 Provider와 구조는 유지하고, main.tsx는 수정하지 않는다. 화면이 2개뿐이라 FloatingTabBar는 쓰지 않는다. 연결한 뒤 검수 반려 항목을 grep과 수동 흐름으로 점검하고, 위반이 있으면 해당 파일을 최소 수정한다.",
+      "acceptance_criteria": [
+        "'/'에 접속하면 Home이 렌더링된다. Home의 ListRow를 탭하면 URL이 '/result/{id}'로 바뀌고 Result가 해당 건을 표시한다. '/unknown'에 접속하면 '/'로 이동한다.",
+        "'/result/{id}'에서 새로고침해도 같은 건이 표시된다. URL id와 저장소를 조회하고, location.state에 의존하지 않는다.",
+        "src/ 대상 grep 결과가 모두 0건이다.\n- `#[0-9a-fA-F]{3,6}`(색상 HEX)\n- `href=\"http`\n- `window.open`\n- `location.href =`\n- `amplitude|gtag|google-analytics`\n- `fetch(`와 `axios`\n- src/pages 안의 `TossRewardAd`",
+        "src/pages와 src/components의 모든 TDS Button, TextField, ChipItem, Switch에 aria-label이 있다.\n- 크기를 덮어쓰는 width/height/padding 인라인 스타일이 0건이다.\n- 예외: Skeleton 막대 div의 height",
+        "수동 흐름에서 console.error가 0건이다. 흐름: 등록 → 목록 → 상세 → 체크 → 반품 신청함 → 보관함 탭 확인 → 상세에서 진행 중으로 되돌리기 → 삭제 → 홈."
+      ]
+    },
+    "covers": [
+      "F2-AC-5",
+      "AC-REWARD",
+      "AC-REVIEW-1",
+      "AC-REVIEW-2",
+      "AC-REVIEW-3",
+      "AC-A11Y-1",
+      "AC-A11Y-2",
+      "AC-A11Y-3"
+    ],
+    "files": [
+      "src/App.tsx"
+    ],
+    "definition_of_done": [
+      "main.tsx는 diff 0이다. 템플릿 @AI:ANCHOR를 보존한다.",
+      "BrowserRouter나 템플릿 라우터 래퍼를 중복 생성하지 않는다. 템플릿에 이미 있으면 Routes만 추가한다.",
+      "shadcn, MUI, Ant Design, Chakra import가 0건이다.",
+      "`npm run build`와 `tsc --noEmit`이 통과한다."
+    ],
+    "depends_on": [
+      "0005",
+      "0007"
+    ],
+    "db_schema": "",
+    "api_contract": "<Routes><Route path='/' element={<Home />} /><Route path='/result/:id' element={<Result />} /><Route path='*' element={<Navigate to='/' replace />} /></Routes>",
+    "dependencies": [
+      "react-router-dom",
+      "@toss/tds-mobile"
+    ],
+    "ui_requirements": "라우팅 패킷이다. 블루프린트의 화면 연결과 공통 전제를 다음과 같이 반영한다.\n\n화면 연결\n- Home (/) — Pattern FixedBottomCTA. ListRow 탭 → /result/{id}\n- Result (/result/:id) — Pattern StatusPanel. '목록으로', 삭제 성공 → /\n- ItemFormSheet — Home·Result 공용 BottomSheet로, 라우트가 아니다.\n\n공통 전제\n- AI 고지 없음: Pattern G/H 미적용\n- 리워드 광고 없음: TossRewardAd 0건(AC-REWARD). 배너 AdSlot은 반드시 AdBoundary로 감싼다(AC-AD-FAIL).\n- 표기: 날짜는 formatKoreanDate, 숫자는 formatNumber, D-day는 0이면 'D-DAY'\n- 여백은 Spacing만 쓴다. 커스텀 div는 flex 배치와 Skeleton 막대에만 쓰고, 색은 var(--adaptive*)만 쓴다.\n- 하단 탭바가 없으므로 FloatingTabBar는 쓰지 않는다."
+  }
+]
