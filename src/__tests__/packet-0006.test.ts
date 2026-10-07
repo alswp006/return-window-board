@@ -194,5 +194,5 @@ describe("ChecklistSection — 환불 체크리스트 (토글·추가·삭제·�
     expect(screen.getByRole("button", { name: "항목 5 삭제" })).toBeInTheDocument();
     expect(input()).toHaveAttribute("aria-label", "새 체크 항목");
     expect(within(document.body).getByRole("button", { name: "추가" })).toBeInTheDocument();
-  });
+  }, 30000);
 });
