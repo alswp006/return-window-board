@@ -277,10 +277,15 @@ CRITICAL: Before creating any new function, type, or component, check the list a
 - 0008: Routing & Integration — App 라우트 연결과 검수 점검 (files: src/App.tsx)
 - 0003: Storage — itemsStore + 체크리스트 프리셋 (files: src/lib/itemsStore.ts, src/lib/checklistPresets.ts)
 - 0004: ItemFormSheet — 등록·수정 공용 BottomSheet + 검증 (files: src/lib/validateForm.ts, src/components/ItemFormSheet.tsx)
+- 0005: Home Page — D-day 보드 + AdBoundary (files: src/pages/Home.tsx, src/components/AdBoundary.tsx)
 
 ## Available exports from existing files
 // src/App.tsx
 export default function App() {
+
+// src/components/AdBoundary.tsx
+export class AdBoundary extends Component<{ children: ReactNode }, { failed: boolean }> {
+export function adGroupId(): string {
 
 // src/components/AdSlot.tsx
 export function AdSlot({ adGroupId, className, variant, theme }: AdSlotProps) {
@@ -294,9 +299,6 @@ export function ButtonStack({
 
 // src/components/Card.tsx
 export function Card({
-
-// src/components/ChecklistSection.tsx
-export function ChecklistSection({
 
 // src/components/CountUp.tsx
 export function CountUp({
@@ -348,7 +350,7 @@ export function newId(prefix = 'id'): string {
 export function seedChecklist(rule: DeadlineRule): ChecklistItem[] {
 
 // src/lib/contract.ts
-export type DeadlineRule = { type: 'purchased' | 'received'; days: number } | { type: 'monthclamped'; months: number };
+export type DeadlineRule = { typ
 
 ## Memory Index (자동 학습 — 힌트로만 사용, 실제 코드 확인 필수)
 

@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import React, { useState } from "react";
 import { render, screen, fireEvent, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
@@ -66,11 +66,20 @@ const toastShown = () =>
   mockOpenToast.mock.calls.some((c) => String(c[0]?.text ?? c[0]).includes(FAIL_TOAST)) ||
   screen.queryByText(FAIL_TOAST) !== null;
 
+let writeSpy: ReturnType<typeof vi.spyOn> | null = null;
+
 function failWrites() {
-  return vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+  writeSpy = vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
     throw new DOMException("quota", "QuotaExceededError");
   });
+  return writeSpy;
 }
+
+// setItem 스파이가 다음 테스트의 seed까지 막지 않게 되돌린다
+afterEach(() => {
+  writeSpy?.mockRestore();
+  writeSpy = null;
+});
 
 beforeEach(() => {
   localStorage.clear();
@@ -123,7 +132,7 @@ describe("ChecklistSection — 환불 체크리스트 (토글·추가·삭제·�
     const switches = screen.getAllByRole("switch");
     expect(switches).toHaveLength(4);
     expect(switches[3]).toHaveAttribute("aria-label", "영수증 챙기기");
-    expect(switches[3].checked).toBe(false);
+    expect((switches[3] as HTMLInputElement).checked).toBe(false);
     expect(input().value).toBe("");
     expect(screen.getByText("1/4 완료")).toBeInTheDocument();
     expect(stored().checklist[3].label).toBe("영수증 챙기기");

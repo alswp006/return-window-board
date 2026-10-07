@@ -210,11 +210,7 @@ export default function Result() {
         <Paragraph.Text typography="t6">{COST_LINE[current.rule]}</Paragraph.Text>
       </Card>
       <Spacing size={12} />
-      <ChecklistSection
-        item={current}
-        onChange={replaceItem}
-        onWriteFail={() => toast.openToast(MESSAGES.SAVE_FAIL_TOAST)}
-      />
+      <ChecklistSection item={current} onChange={replaceItem} />
       <Spacing size={16} />
       <div style={{ display: 'flex', gap: 8 }}>
         <div style={{ flex: 1 }}>
