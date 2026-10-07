@@ -6,7 +6,7 @@ import type { DeadlineRule, ItemFormInput, ReturnItem } from '@/lib/types';
 import { MESSAGES, RULE_OPTIONS } from '@/lib/types';
 import { computeDeadline, ddayLabel, formatKoreanDate, todayYmd } from '@/lib/deadline';
 import { addItem, loadItems, recentStores as deriveRecentStores, StoreWriteError, updateItem } from '@/lib/itemsStore';
-import { validateForm } from '@/lib/validateForm';
+import { FORM_FIELD_ORDER, validateForm } from '@/lib/validateForm';
 import type { FormField } from '@/lib/validateForm';
 import { logClick } from '@/lib/analytics';
 
@@ -143,7 +143,10 @@ export function ItemFormSheet({
     onClose();
   };
 
-  const hint = saveFailed ? MESSAGES.WRITE_FAIL_HINT : validation.valid ? undefined : validation.firstHint;
+  const firstInvalid = FORM_FIELD_ORDER.find((f) => validation.fieldErrors[f]);
+  // 기한 유형 칩은 시트 아래쪽에 있다 — 문구가 어디서 고르는지 알려 준다
+  const validationHint = firstInvalid === 'rule' ? '아래 기한 유형에서 하나를 골라 주세요' : validation.firstHint;
+  const hint = saveFailed ? MESSAGES.WRITE_FAIL_HINT : validation.valid ? undefined : validationHint;
 
   const selectedRuleLabel = RULE_OPTIONS.find((o) => o.value === input.rule)?.label;
 
@@ -167,7 +170,7 @@ export function ItemFormSheet({
           topAccessory={
             hint ? (
               <div data-testid="item-form-hint" style={{ textAlign: 'center' }}>
-                <Paragraph.Text typography="t7" color="var(--adaptiveGrey600)">
+                <Paragraph.Text typography="t7" color={validation.valid ? 'var(--adaptiveGrey600)' : 'var(--adaptiveRed500)'}>
                   {hint}
                 </Paragraph.Text>
               </div>
