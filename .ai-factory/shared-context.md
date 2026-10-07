@@ -211,6 +211,7 @@ export const MESSAGES = {
   lib/
     analytics.ts
     contract.ts
+    deadline.ts
     review.ts
     share.ts
     storage.ts
@@ -230,6 +231,7 @@ export const MESSAGES = {
 ### Exports (src/lib/)
 - analytics.ts: export type LogFields = Record<string, string | number | boolean | null>; export const DWELL_MS = 3000; export function fireAndForget(call: () => unknown): void; export function logScreen(page: string, extra?: LogFields): void; export function logClick(name: string, extra?: LogFields): void; export function logImpression(name: string, extra?: LogFields): void; export function useScreenLog(page: string): void
 - contract.ts: export type DeadlineRule =; export type ItemStatus = 'active' | 'archived'; export type ChecklistItem =; export type ReturnItem =; export type ItemFormInput =; export type DeadlineInfo =; export type BoardSection = 'active' | 'archived'; export type ArchiveReason = 'expired' | 'returned' | 'cancelled'
+- deadline.ts: export function addDays(ymd: string, n: number): string; export function addMonthsClamped(ymd: string, n: number): string; export function diffDays(a: string, b: string): number; export function todayYmd(): string; export function computeDeadline( src: Pick<ReturnItem, 'receivedDate' | 'useStartDate' | 'rule' | 'storePolicyDays'>, to; export function ddayLabel(d: number): string; export function sortActive(items: ReturnItem[], today: string): ReturnItem[]; export function sortArchive(items: ReturnItem[], today: string): ReturnItem[]
 - review.ts: export function requestReviewOnce(key: string = REVIEW_REQUESTED_KEY): void
 - share.ts: export interface ShareAppOptions; export async function shareApp(opts: ShareAppOptions): Promise<void>
 - storage.ts: export function getItem<T>(key: string): T | null; export function setItem<T>(key: string, value: T): void; export function removeItem(key: string): void
@@ -255,11 +257,12 @@ CRITICAL: Before creating any new function, type, or component, check the list a
 
 ## Already Implemented (do NOT duplicate or overwrite)
 - 0001: Types & Constants (files: src/lib/types.ts)
+- 0002: Core Logic — 마감일 계산·정렬·날짜 포맷 (files: src/lib/deadline.ts)
+
+## TDD 상태
+⚠️ TDD 테스트 파일 자동 작성에 실패했습니다. 소스 코드를 작성하기 전에 `src/__tests__/packet-XXXX.test.ts` 파일에 AC 기반 테스트를 먼저 작성하세요 (TDD red phase). 테스트 작성 후 구현하세요.
 
 ## Available exports from existing files
-// src/App.tsx
-export default function App() {
-
 // src/components/AdSlot.tsx
 export function AdSlot({ adGroupId, className, variant, theme }: AdSlotProps) {
 
@@ -319,7 +322,8 @@ export function useScreenLog(page: string): void {
 export type DeadlineRule = { type: 'purchased' | 'received'; days: number } | { type: 'monthclamped'; months: number };
 export type ItemStatus = 'active' | 'archived';
 export type ChecklistItem = { id: string; text: string; completed: boolean };
-export type ReturnItem = { id: string; productName: string; store: string; createdAt: string; receivedDate: string; rule: DeadlineRule; checklist: ChecklistItem[]; s
+export type ReturnItem = { id: string; productName: string; store: string; createdAt: string; receivedDate: string; rule: DeadlineRule; checklist: ChecklistItem[]; status: ItemStatus };
+export type ItemFormInput =
 
 ## Memory Index (자동 학습 — 힌트로만 사용, 실제 코드 확인 필수)
 

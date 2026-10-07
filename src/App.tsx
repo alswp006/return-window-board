@@ -19,7 +19,8 @@ export default function App() {
     // @ai-factory:providers — 전역 Provider는 <Routes>를 감싸는 이 자리에 둔다(main.tsx는 @AI:ANCHOR, 수정 금지).
     <Routes>
       <Route path="/" element={<Home />} />
-      <Route path="/result" element={<Result />} />
+      {/* 상세는 URL id로 저장소를 조회한다(새로고침에도 유지). id 없는 옛 '/result'는 아래 캐치올이 홈으로 보낸다. */}
+      <Route path="/result/:id" element={<Result />} />
       {DevTdsGallery && (
         <Route
           path="/__tds-gallery"

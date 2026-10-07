@@ -1,73 +1,245 @@
-import { Top, Paragraph, Spacing, ListRow, Button } from '@toss/tds-mobile';
-import { useNavigate } from 'react-router-dom';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useLinkClickHandler } from 'react-router-dom';
+import { Badge, Button, ListRow, Paragraph, Spacing, Tab, Top } from '@toss/tds-mobile';
 import { ScreenScaffold } from '../components/ScreenScaffold';
 import { SummaryHero } from '../components/SummaryHero';
-import { Card } from '../components/Card';
+import { SubmitFooter } from '../components/BottomCTA';
+import { EmptyState, LoadingState } from '../components/StateView';
+import { AdSlot } from '../components/AdSlot';
+import { AdBoundary, adGroupId } from '../components/AdBoundary';
+import { ItemFormSheet } from '../components/ItemFormSheet';
+import type { BoardSection, ReturnItem } from '@/lib/types';
+import { ARCHIVE_LABEL, MESSAGES } from '@/lib/types';
+import {
+  archiveReason,
+  computeDeadline,
+  ddayLabel,
+  formatKoreanDate,
+  sortActive,
+  sortArchive,
+  summarizeActive,
+  todayYmd,
+} from '@/lib/deadline';
+import { formatNumber } from '@/lib/utils';
+import { loadItems, recentStores, reloadItems } from '@/lib/itemsStore';
+import { logClick } from '@/lib/analytics';
 
-/**
- * Golden Home page — 대시보드/탭-루트 골든 레퍼런스.
- *
- * 다른 페이지를 쓸 때 이 패턴을 모방하라:
- * - ScreenScaffold로 감싼다(raw fragment 골격 금지) — safe-area + 100dvh 자동 처리.
- * - 화면 최상단에 SummaryHero로 시각 앵커를 만든다('휑함'의 가장 큰 원인은 앵커 부재).
- *   데이터가 있으면 value에 <Amount value={n} unit="원" typography="t1" />로 핵심 숫자를 크게 박아라.
- * - 1차 진입 액션은 SummaryHero 카드 내부 버튼(display="block", 전체폭)에 둔다.
- *   → 화면 중앙 부유/좌측 글자폭 버튼 금지. 하단 TabBar가 있으면 SubmitFooter와 겹치므로 카드 안에.
- * - 핵심 정보는 raw <div>가 아니라 Card로 묶어 위계를 만든다.
- * - 하단 탭이 필요하면(2~5탭): bottom={<FloatingTabBar items={[{label,path}...]} />}.
- *   ('TDS TabBar'는 존재하지 않는다 — 직접 만들지 말고 FloatingTabBar를 써라.)
- * - 카피는 CLAUDE.md "카피 규칙 — AI 냄새 금지"를 따른다: 기능 나열식 홍보 문구·상투구·
- *   generic 버튼("시작하기") 금지. 이 파일의 예시 문구도 앱 맥락에 맞게 교체 대상이다.
- *
- * Scaffold tokens (replaced by scaffold-toss.ts at project creation):
- *   Return Window Board -> the app's display name
- *   산 지 며칠 됐더라? 온라인 주문의 반품·청약철회 마감일을 D-day로 모아 보여 줘요    -> the one-line description
- */
+type Phase = { kind: 'loading' } | { kind: 'error' } | { kind: 'ready'; items: ReturnItem[] };
 
-// ⚠ 이 목록은 골격 예시다 — 앱의 실제 콘텐츠(핵심 지표·최근 기록·바로가기)로 반드시 교체하라.
-// '간편한 사용/빠른 처리' 같은 기능 나열식 홍보 문구는 카피 규칙(CLAUDE.md "AI 냄새 금지") 위반이다.
-// 사용자가 이 화면에서 실제로 확인할 정보를 넣어라 — 아래처럼 데이터가 사는 행으로.
-const HIGHLIGHTS = [
-  { title: '오늘', description: '아직 기록이 없어요' },
-  { title: '이번 주', description: '기록 3건 · 평균 12분' },
-];
+// 탭 위치는 상세에 다녀와도 남도록 세션에 둔다
+const TAB_KEY = 'rwb:home-tab';
+
+function readTab(): BoardSection {
+  try {
+    return sessionStorage.getItem(TAB_KEY) === 'archive' ? 'archive' : 'active';
+  } catch {
+    return 'active';
+  }
+}
+
+function writeTab(tab: BoardSection) {
+  try {
+    sessionStorage.setItem(TAB_KEY, tab);
+  } catch {
+    /* 저장 불가 환경 — 탭 위치만 잃는다 */
+  }
+}
+
+function summaryLine(items: ReturnItem[], today: string): string {
+  const { todayCount, within3Count, nearest } = summarizeActive(items, today);
+  if (todayCount > 0 || within3Count > 0) {
+    return `오늘 마감 ${formatNumber(todayCount)}건 · 3일 안에 ${formatNumber(within3Count)}건`;
+  }
+  if (nearest) return `가장 가까운 마감: ${nearest.item.productName} ${ddayLabel(nearest.dDay)}`;
+  return '진행 중인 건이 없어요';
+}
+
+/** 목록 한 줄 — 탭하면 /result/{id}. 줄 전체가 링크처럼 동작한다(라우터 링크 클릭 처리 그대로). */
+function BoardRow({ item, today, archived }: { item: ReturnItem; today: string; archived: boolean }) {
+  const open = useLinkClickHandler<HTMLElement>(`/result/${item.id}`);
+  const info = computeDeadline(item, today);
+  const reason = archived ? archiveReason(item, today) : null;
+  return (
+    <ListRow
+      withArrow
+      onClick={(e) => {
+        logClick('item_open');
+        open(e);
+      }}
+      contents={
+        <ListRow.Texts
+          type="2RowTypeA"
+          top={item.productName}
+          bottom={`${item.store} · ${formatKoreanDate(info.deadline, today)}`}
+        />
+      }
+      right={
+        reason ? (
+          <Paragraph.Text typography="t6" color="var(--adaptiveGrey600)">
+            {ARCHIVE_LABEL[reason]}
+          </Paragraph.Text>
+        ) : info.isToday ? (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <Badge size="small" variant="fill" color="red">
+              오늘 마감
+            </Badge>
+            <Paragraph.Text typography="t5" color="var(--adaptiveRed500)">
+              {ddayLabel(info.dDay)}
+            </Paragraph.Text>
+          </div>
+        ) : (
+          <Paragraph.Text
+            typography="t5"
+            color={info.dDay <= 3 ? 'var(--adaptiveRed500)' : 'var(--adaptiveGrey700)'}
+          >
+            {ddayLabel(info.dDay)}
+          </Paragraph.Text>
+        )
+      }
+    />
+  );
+}
 
 export default function Home() {
-  const navigate = useNavigate();
+  const today = todayYmd();
+  const [phase, setPhase] = useState<Phase>({ kind: 'loading' });
+  const [tab, setTab] = useState<BoardSection>(readTab);
+  const [sheetOpen, setSheetOpen] = useState(false);
+
+  const read = useCallback((fresh: boolean) => {
+    try {
+      setPhase({ kind: 'ready', items: fresh ? reloadItems() : loadItems() });
+    } catch {
+      setPhase({ kind: 'error' });
+    }
+  }, []);
+
+  useEffect(() => {
+    read(false);
+  }, [read]);
+
+  const items = phase.kind === 'ready' ? phase.items : [];
+  const active = useMemo(() => sortActive(items, today), [items, today]);
+  const archive = useMemo(() => sortArchive(items, today), [items, today]);
+  const stores = useMemo(() => recentStores(items), [items]);
+
+  const changeTab = (next: BoardSection) => {
+    setTab(next);
+    writeTab(next);
+  };
+
+  const openSheet = () => {
+    logClick('item_add_open');
+    setSheetOpen(true);
+  };
+
+  const handleSaved = () => {
+    setSheetOpen(false);
+    changeTab('active');
+    read(false);
+  };
+
+  const top = <Top title={<Top.TitleParagraph>반품 마감 보드</Top.TitleParagraph>} />;
+
+  if (phase.kind === 'loading') {
+    return (
+      <ScreenScaffold top={top}>
+        <LoadingState rows={4} testId="home-loading" />
+      </ScreenScaffold>
+    );
+  }
+
+  if (phase.kind === 'error') {
+    return (
+      <ScreenScaffold top={top}>
+        <EmptyState
+          testId="home-error"
+          title={MESSAGES.LOAD_ERROR}
+          description="저장소를 다시 읽으면 대부분 해결돼요"
+          action={
+            <Button aria-label="다시 시도" variant="weak" onClick={() => read(true)}>
+              다시 시도
+            </Button>
+          }
+        />
+      </ScreenScaffold>
+    );
+  }
+
+  const sheet = (
+    <ItemFormSheet
+      open={sheetOpen}
+      mode="create"
+      recentStores={stores}
+      onClose={() => setSheetOpen(false)}
+      onSaved={handleSaved}
+    />
+  );
+
+  if (items.length === 0) {
+    return (
+      <ScreenScaffold top={top}>
+        <EmptyState
+          testId="home-empty"
+          title="아직 등록한 주문이 없어요"
+          description="받은 날만 넣으면 반품 마감일을 계산해 드려요"
+          action={
+            <Button aria-label="첫 주문 등록하기" variant="fill" onClick={openSheet}>
+              첫 주문 등록하기
+            </Button>
+          }
+        />
+        {sheet}
+      </ScreenScaffold>
+    );
+  }
+
+  const rows = tab === 'active' ? active : archive;
+  const ad = adGroupId();
 
   return (
     <ScreenScaffold
-      top={<Top title={<Top.TitleParagraph>반품 마감 보드</Top.TitleParagraph>} />}
+      top={top}
+      bottom={<SubmitFooter label="반품 건 추가" onClick={openSheet} />}
     >
-      {/* 시각 앵커: 헤드라인 + 카드 내 진입 버튼(부유 금지, display="block" 전체폭).
-          데이터 앱이면 value를 <Amount typography="t1" />(핵심 숫자)로 교체하라. */}
       <SummaryHero
-        label="반품 마감 보드"
-        value={<Paragraph.Text typography="t2">산 지 며칠 됐더라? 온라인 주문의 반품·청약철회 마감일을 D-day로 모아 보여 줘요</Paragraph.Text>}
-        caption="로그인 없이 바로 쓸 수 있어요"
-        action={
-          // 라벨은 앱의 핵심 행동 동사로 교체하라 — "연봉 계산하기"/"기록 남기기" 등.
-          // generic "시작하기"/"확인"은 카피 규칙 위반. onClick도 실제 첫 화면 경로로.
-          <Button variant="fill" display="block" onClick={() => navigate('/')}>
-            첫 결과 보기
-          </Button>
-        }
-        testId="home-hero"
+        testId="home-summary"
+        label={`진행 중 ${formatNumber(active.length)}건`}
+        value={<Paragraph.Text typography="t3">{summaryLine(items, today)}</Paragraph.Text>}
       />
-
-      <Spacing size={24} />
-
-      {/* 핵심 정보는 Card로 묶기(raw div 금지) — 위계 생성 */}
-      <Card testId="home-highlights">
-        {HIGHLIGHTS.map((h, idx) => (
-          <ListRow
-            key={idx}
-            contents={<ListRow.Texts type="2RowTypeA" top={h.title} bottom={h.description} />}
-          />
-        ))}
-      </Card>
-
-      <Spacing size={24} />
+      <Spacing size={16} />
+      <Tab onChange={(i) => changeTab(i === 1 ? 'archive' : 'active')}>
+        <Tab.Item selected={tab === 'active'}>{`진행 중 ${formatNumber(active.length)}`}</Tab.Item>
+        <Tab.Item selected={tab === 'archive'}>{`보관함 ${formatNumber(archive.length)}`}</Tab.Item>
+      </Tab>
+      <Spacing size={8} />
+      {rows.length === 0 ? (
+        <EmptyState
+          testId="home-tab-empty"
+          title={tab === 'archive' ? '보관함이 비어 있어요' : '진행 중인 건이 없어요'}
+          description={
+            tab === 'archive'
+              ? '반품을 신청했거나 계속 쓰기로 한 건이 여기에 모여요'
+              : '새로 받은 주문을 추가하면 마감일을 계산해 드려요'
+          }
+        />
+      ) : (
+        <div data-testid="home-list">
+          {rows.map((item) => (
+            <BoardRow key={item.id} item={item} today={today} archived={tab === 'archive'} />
+          ))}
+        </div>
+      )}
+      {ad ? (
+        <>
+          <Spacing size={24} />
+          <AdBoundary>
+            <AdSlot adGroupId={ad} />
+          </AdBoundary>
+        </>
+      ) : null}
+      <Spacing size={120} />
+      {sheet}
     </ScreenScaffold>
   );
 }

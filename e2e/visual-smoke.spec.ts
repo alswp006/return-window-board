@@ -12,14 +12,34 @@ import { test, expect, type Page } from "@playwright/test";
  */
 const ROUTES: { path: string; name: string }[] = [
   { path: "/", name: "home" },
-  // { path: "/result", name: "result" },   // ← 이 앱의 라우트를 추가
-  // { path: "/settings", name: "settings" },
+  { path: "/result/seed-coat", name: "result" },
+  { path: "/result/missing-id", name: "result-missing" },
 ];
 
 /** 데이터가 필요한 화면용 localStorage 시드(앱에 맞게 채워라). 앱 스크립트보다 먼저 실행된다. */
 async function seed(page: Page): Promise<void> {
   await page.addInitScript(() => {
-    // window.localStorage.setItem("MY_STORAGE_KEY", JSON.stringify({ /* ... */ }));
+    const pad = (n: number) => String(n).padStart(2, "0");
+    const ymd = (offset: number) => {
+      const d = new Date();
+      d.setDate(d.getDate() + offset);
+      return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+    };
+    const checklist = (id: string) => [
+      { id: `${id}-1`, label: "주문번호·결제 내역 캡처해 두기", done: true },
+      { id: `${id}-2`, label: "받은 상태 사진 찍기 (상자·상품·구성품)", done: false },
+      { id: `${id}-3`, label: "택·라벨 떼지 않기", done: false },
+    ];
+    const item = (id: string, productName: string, store: string, received: number, extra: object = {}) => ({
+      id, productName, store, receivedDate: ymd(received), rule: "change_of_mind_7d",
+      checklist: checklist(id), status: "active", createdAt: new Date().toISOString(), ...extra,
+    });
+    window.localStorage.setItem("rwb:items:v1", JSON.stringify([
+      item("seed-coat", "울 블렌드 롱코트", "무신사", -7, { useStartDate: ymd(-5) }),
+      item("seed-shoes", "러닝화 270", "쿠팡", -5),
+      item("seed-vacuum", "무선 청소기 V12", "11번가", -20, { rule: "mismatch_3m" }),
+      item("seed-old", "블루투스 이어폰", "네이버 스토어", -30),
+    ]));
   });
 }
 

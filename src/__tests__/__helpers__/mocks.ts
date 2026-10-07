@@ -373,7 +373,8 @@ export function mockTds() {
             { role: "navigation" },
             slot("upper", upper),
             subtitleTop != null ? h("p", { "data-slot": "subtitle-top" }, subtitleTop) : null,
-            title ? h("h1", null, title) : null,
+            // 벤더 사용법은 title={<Top.TitleParagraph>…}(TitleParagraph가 제목 요소)다 — 노드를 h1로 또 감싸면 h1>h1(validateDOMNesting).
+            title ? (typeof title === "string" ? h("h1", null, title) : h("div", { "data-slot": "title" }, title)) : null,
             subtitleBottom != null ? h("p", { "data-slot": "subtitle-bottom" }, subtitleBottom) : null,
             slot("right", right),
             slot("lower", lower),

@@ -402,15 +402,19 @@ describe("Storage — itemsStore + 체크리스트 프리셋", () => {
         storePolicyDays: "",
       };
 
-      const added = addItem(input);
+      addItem(input);
       const first = loadItems();
+
+      // Unchanged storage → second call returns the cached array without reparsing
+      const parseSpy = vi.spyOn(JSON, "parse");
+      const second = loadItems();
+      expect(second).toBe(first);
+      expect(second.length).toBe(1);
+      expect(parseSpy).not.toHaveBeenCalled();
+      parseSpy.mockRestore();
 
       // Corrupt localStorage
       localStorage.setItem(STORAGE_KEY, "{bad");
-
-      // loadItems should return cached value (not throw)
-      const second = loadItems();
-      expect(second.length).toBe(1);
 
       // reloadItems should throw because it ignores cache
       expect(() => reloadItems()).toThrow();
@@ -423,8 +427,8 @@ describe("Storage — itemsStore + 체크리스트 프리셋", () => {
       const { addItem, StoreWriteError } = await import("@/lib/itemsStore");
 
       // Mock localStorage.setItem to throw
-      const originalSetItem = localStorage.setItem;
-      localStorage.setItem = vi.fn(() => {
+      // jsdom: `localStorage.setItem = fn` stores a key named "setItem" instead of replacing the method
+      const setItemSpy = vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
         throw new DOMException("QuotaExceededError", "QuotaExceededError");
       });
 
@@ -440,7 +444,7 @@ describe("Storage — itemsStore + 체크리스트 프리셋", () => {
       expect(() => addItem(input)).toThrow(StoreWriteError);
 
       // Restore and cleanup
-      localStorage.setItem = originalSetItem;
+      setItemSpy.mockRestore();
     });
 
     it("addItem should preserve cache and localStorage on write failure", async () => {
@@ -457,8 +461,8 @@ describe("Storage — itemsStore + 체크리스트 프리셋", () => {
       };
       const added1 = addItem(input1);
 
-      const originalSetItem = localStorage.setItem;
-      localStorage.setItem = vi.fn(() => {
+      // jsdom: `localStorage.setItem = fn` stores a key named "setItem" instead of replacing the method
+      const setItemSpy = vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
         throw new DOMException("QuotaExceededError", "QuotaExceededError");
       });
 
@@ -474,7 +478,7 @@ describe("Storage — itemsStore + 체크리스트 프리셋", () => {
       expect(() => addItem(input2)).toThrow(StoreWriteError);
 
       // Restore setItem and verify state is preserved
-      localStorage.setItem = originalSetItem;
+      setItemSpy.mockRestore();
 
       const loaded = loadItems();
       expect(loaded.length).toBe(1);
@@ -495,14 +499,14 @@ describe("Storage — itemsStore + 체크리스트 프리셋", () => {
 
       const added = addItem(input);
 
-      const originalSetItem = localStorage.setItem;
-      localStorage.setItem = vi.fn(() => {
+      // jsdom: `localStorage.setItem = fn` stores a key named "setItem" instead of replacing the method
+      const setItemSpy = vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
         throw new DOMException("QuotaExceededError", "QuotaExceededError");
       });
 
       expect(() => deleteItem(added.id)).toThrow(StoreWriteError);
 
-      localStorage.setItem = originalSetItem;
+      setItemSpy.mockRestore();
     });
   });
 
