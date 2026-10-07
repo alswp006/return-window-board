@@ -278,6 +278,7 @@ CRITICAL: Before creating any new function, type, or component, check the list a
 - 0003: Storage — itemsStore + 체크리스트 프리셋 (files: src/lib/itemsStore.ts, src/lib/checklistPresets.ts)
 - 0004: ItemFormSheet — 등록·수정 공용 BottomSheet + 검증 (files: src/lib/validateForm.ts, src/components/ItemFormSheet.tsx)
 - 0005: Home Page — D-day 보드 + AdBoundary (files: src/pages/Home.tsx, src/components/AdBoundary.tsx)
+- 0006: ChecklistSection — 환불 체크리스트 (토글·추가·삭제·롤백) (files: src/components/ChecklistSection.tsx)
 
 ## Available exports from existing files
 // src/App.tsx
@@ -299,6 +300,9 @@ export function ButtonStack({
 
 // src/components/Card.tsx
 export function Card({
+
+// src/components/ChecklistSection.tsx
+export function ChecklistSection({
 
 // src/components/CountUp.tsx
 export function CountUp({
@@ -347,10 +351,7 @@ export function useScreenLog(page: string): void {
 
 // src/lib/checklistPresets.ts
 export function newId(prefix = 'id'): string {
-export function seedChecklist(rule: DeadlineRule): ChecklistItem[] {
-
-// src/lib/contract.ts
-export type DeadlineRule = { typ
+export function seedChecklist(rule: DeadlineRule):
 
 ## Memory Index (자동 학습 — 힌트로만 사용, 실제 코드 확인 필수)
 
