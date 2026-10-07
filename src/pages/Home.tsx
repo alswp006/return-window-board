@@ -1,14 +1,16 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
 import { useLinkClickHandler } from 'react-router-dom';
 import { Badge, Button, ListRow, Paragraph, Spacing, Tab, Top } from '@toss/tds-mobile';
+import { generateHapticFeedback } from '@apps-in-toss/web-framework';
 import { ScreenScaffold } from '../components/ScreenScaffold';
 import { SummaryHero } from '../components/SummaryHero';
 import { SubmitFooter } from '../components/BottomCTA';
-import { EmptyState, LoadingState } from '../components/StateView';
+import { EmptyState } from '../components/StateView';
 import { AdSlot } from '../components/AdSlot';
 import { AdBoundary, adGroupId } from '../components/AdBoundary';
 import { ItemFormSheet } from '../components/ItemFormSheet';
 import type { BoardSection, ReturnItem } from '@/lib/types';
+import type { ArchiveReason } from '@/lib/types';
 import { ARCHIVE_LABEL, MESSAGES } from '@/lib/types';
 import {
   archiveReason,
@@ -45,13 +47,33 @@ function writeTab(tab: BoardSection) {
   }
 }
 
-function summaryLine(items: ReturnItem[], today: string): string {
-  const { todayCount, within3Count, nearest } = summarizeActive(items, today);
-  if (todayCount > 0 || within3Count > 0) {
-    return `오늘 마감 ${formatNumber(todayCount)}건 · 3일 안에 ${formatNumber(within3Count)}건`;
+const ARCHIVE_COLOR: Record<ArchiveReason, 'blue' | 'teal' | 'elephant'> = {
+  returned: 'blue',
+  kept: 'teal',
+  expired: 'elephant',
+};
+
+// SDK는 WebView 밖에서 throw한다 — 햅틱 실패가 탭 전환·시트 열기를 막으면 안 된다
+function haptic(type: 'tickWeak' | 'success') {
+  try {
+    Promise.resolve(generateHapticFeedback({ type })).catch(() => {});
+  } catch {
+    /* WebView 밖 — 무시 */
   }
-  if (nearest) return `가장 가까운 마감: ${nearest.item.productName} ${ddayLabel(nearest.dDay)}`;
-  return '진행 중인 건이 없어요';
+}
+
+/** 진행 중 1건 이상일 때만 부른다 — 요약 문구와 히어로 숫자(가장 가까운 D-day) */
+function summaryOf(items: ReturnItem[], today: string): { headline: string; text: string } | null {
+  const { todayCount, within3Count, nearest } = summarizeActive(items, today);
+  if (!nearest) return null;
+  const headline = ddayLabel(nearest.dDay);
+  if (todayCount > 0 || within3Count > 0) {
+    return {
+      headline,
+      text: `오늘 마감 ${formatNumber(todayCount)}건 · 3일 안에 ${formatNumber(within3Count)}건`,
+    };
+  }
+  return { headline, text: `가장 가까운 마감: ${nearest.item.productName} ${headline}` };
 }
 
 /** 목록 한 줄 — 탭하면 /result/{id}. 줄 전체가 링크처럼 동작한다(라우터 링크 클릭 처리 그대로). */
@@ -75,9 +97,9 @@ function BoardRow({ item, today, archived }: { item: ReturnItem; today: string; 
       }
       right={
         reason ? (
-          <Paragraph.Text typography="t6" color="var(--adaptiveGrey600)">
+          <Badge size="small" variant="weak" color={ARCHIVE_COLOR[reason]}>
             {ARCHIVE_LABEL[reason]}
-          </Paragraph.Text>
+          </Badge>
         ) : info.isToday ? (
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <Badge size="small" variant="fill" color="red">
@@ -128,9 +150,15 @@ export default function Home() {
     writeTab(next);
   };
 
+  // '반품 건 추가'(SubmitFooter)는 success 햅틱을 자체로 낸다 — 여기서 또 내지 않는다
   const openSheet = () => {
     logClick('item_add_open');
     setSheetOpen(true);
+  };
+
+  const openFirst = () => {
+    haptic('success');
+    openSheet();
   };
 
   const handleSaved = () => {
@@ -144,7 +172,15 @@ export default function Home() {
   if (phase.kind === 'loading') {
     return (
       <ScreenScaffold top={top}>
-        <LoadingState rows={4} testId="home-loading" />
+        {[0, 1, 2].map((i) => (
+          <Fragment key={i}>
+            {i > 0 ? <Spacing size={8} /> : null}
+            <div
+              data-skeleton="true"
+              style={{ height: 56, borderRadius: 12, backgroundColor: 'var(--adaptiveGrey100)' }}
+            />
+          </Fragment>
+        ))}
       </ScreenScaffold>
     );
   }
@@ -184,7 +220,7 @@ export default function Home() {
           title="아직 등록한 주문이 없어요"
           description="받은 날만 넣으면 반품 마감일을 계산해 드려요"
           action={
-            <Button aria-label="첫 주문 등록하기" variant="fill" onClick={openSheet}>
+            <Button aria-label="첫 주문 등록하기" variant="weak" onClick={openFirst}>
               첫 주문 등록하기
             </Button>
           }
@@ -196,19 +232,29 @@ export default function Home() {
 
   const rows = tab === 'active' ? active : archive;
   const ad = adGroupId();
+  const summary = summaryOf(items, today);
 
   return (
     <ScreenScaffold
       top={top}
       bottom={<SubmitFooter label="반품 건 추가" onClick={openSheet} />}
     >
-      <SummaryHero
-        testId="home-summary"
-        label={`진행 중 ${formatNumber(active.length)}건`}
-        value={<Paragraph.Text typography="t3">{summaryLine(items, today)}</Paragraph.Text>}
-      />
+      <Spacing size={8} />
+      {summary ? (
+        <SummaryHero
+          testId="home-summary"
+          label="반품 마감 요약"
+          value={<Paragraph.Text typography="t1">{summary.headline}</Paragraph.Text>}
+          caption={summary.text}
+        />
+      ) : null}
       <Spacing size={16} />
-      <Tab onChange={(i) => changeTab(i === 1 ? 'archive' : 'active')}>
+      <Tab
+        onChange={(i) => {
+          haptic('tickWeak');
+          changeTab(i === 1 ? 'archive' : 'active');
+        }}
+      >
         <Tab.Item selected={tab === 'active'}>{`진행 중 ${formatNumber(active.length)}`}</Tab.Item>
         <Tab.Item selected={tab === 'archive'}>{`보관함 ${formatNumber(archive.length)}`}</Tab.Item>
       </Tab>
@@ -217,11 +263,7 @@ export default function Home() {
         <EmptyState
           testId="home-tab-empty"
           title={tab === 'archive' ? '보관함이 비어 있어요' : '진행 중인 건이 없어요'}
-          description={
-            tab === 'archive'
-              ? '반품을 신청했거나 계속 쓰기로 한 건이 여기에 모여요'
-              : '새로 받은 주문을 추가하면 마감일을 계산해 드려요'
-          }
+          description={tab === 'archive' ? undefined : '새로 받은 주문을 추가하면 마감일을 계산해 드려요'}
         />
       ) : (
         <div data-testid="home-list">

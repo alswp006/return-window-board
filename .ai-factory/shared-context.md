@@ -276,14 +276,11 @@ CRITICAL: Before creating any new function, type, or component, check the list a
 - 0002: Core Logic — 마감일 계산·정렬·날짜 포맷 (files: src/lib/deadline.ts)
 - 0008: Routing & Integration — App 라우트 연결과 검수 점검 (files: src/App.tsx)
 - 0003: Storage — itemsStore + 체크리스트 프리셋 (files: src/lib/itemsStore.ts, src/lib/checklistPresets.ts)
+- 0004: ItemFormSheet — 등록·수정 공용 BottomSheet + 검증 (files: src/lib/validateForm.ts, src/components/ItemFormSheet.tsx)
 
 ## Available exports from existing files
 // src/App.tsx
 export default function App() {
-
-// src/components/AdBoundary.tsx
-export class AdBoundary extends Component<{ children: ReactNode }, { failed: boolean }> {
-export function adGroupId(): string {
 
 // src/components/AdSlot.tsx
 export function AdSlot({ adGroupId, className, variant, theme }: AdSlotProps) {
@@ -307,6 +304,9 @@ export function CountUp({
 // src/components/FloatingTabBar.tsx
 export type TabItem = {
 export function FloatingTabBar({ items }: { items: TabItem[] }) {
+
+// src/components/ItemFormSheet.tsx
+export function ItemFormSheet({
 
 // src/components/MiniBar.tsx
 export function MiniBar({
@@ -348,7 +348,7 @@ export function newId(prefix = 'id'): string {
 export function seedChecklist(rule: DeadlineRule): ChecklistItem[] {
 
 // src/lib/contract.ts
-export type DeadlineRule =
+export type DeadlineRule = { type: 'purchased' | 'received'; days: number } | { type: 'monthclamped'; months: number };
 
 ## Memory Index (자동 학습 — 힌트로만 사용, 실제 코드 확인 필수)
 
