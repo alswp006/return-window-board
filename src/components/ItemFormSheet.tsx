@@ -117,6 +117,8 @@ export function ItemFormSheet({
 
   const hint = saveFailed ? MESSAGES.WRITE_FAIL_HINT : validation.valid ? undefined : validation.firstHint;
 
+  const selectedRuleLabel = RULE_OPTIONS.find((o) => o.value === input.rule)?.label;
+
   const pickRule = (rule: DeadlineRule) => {
     set('rule', rule);
     touch('rule');
@@ -210,9 +212,11 @@ export function ItemFormSheet({
         help={errorOf('receivedDate')}
       />
       <Spacing size={16} />
-      <Paragraph.Text typography="t6">기한 유형</Paragraph.Text>
+      <Paragraph.Text typography="t6">
+        {selectedRuleLabel ? `기한 유형 · ${selectedRuleLabel} 선택됨` : '기한 유형'}
+      </Paragraph.Text>
       <Spacing size={8} />
-      <Chip kind="select" wrap>
+      <Chip kind="select" variant="fill" wrap>
         {RULE_OPTIONS.map((opt) => (
           <ChipItem
             key={opt.value}
