@@ -37,12 +37,12 @@ export default function Home() {
 
   return (
     <ScreenScaffold
-      top={<Top title={<Top.TitleParagraph>Return Window Board</Top.TitleParagraph>} />}
+      top={<Top title={<Top.TitleParagraph>반품 마감 보드</Top.TitleParagraph>} />}
     >
       {/* 시각 앵커: 헤드라인 + 카드 내 진입 버튼(부유 금지, display="block" 전체폭).
           데이터 앱이면 value를 <Amount typography="t1" />(핵심 숫자)로 교체하라. */}
       <SummaryHero
-        label="Return Window Board"
+        label="반품 마감 보드"
         value={<Paragraph.Text typography="t2">산 지 며칠 됐더라? 온라인 주문의 반품·청약철회 마감일을 D-day로 모아 보여 줘요</Paragraph.Text>}
         caption="로그인 없이 바로 쓸 수 있어요"
         action={
